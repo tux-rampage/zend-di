@@ -9,17 +9,35 @@
 
 namespace Zend\Di;
 
-interface DependencyInjectionInterface extends LocatorInterface
+
+interface DependencyInjectionInterface
 {
+    /**
+     * Check if this dependency injector can handle the given class
+     *
+     * @param   string $name
+     * @return  bool
+     */
+    public function canInstanciate($name);
+
     /**
      * Retrieve a new instance of a class
      *
-     * Forces retrieval of a discrete instance of the given class, using the
-     * constructor parameters provided.
+     * Forces retrieval of a discrete instance of the given class.
      *
-     * @param  mixed       $name   Class name or service alias
-     * @param  array       $params Parameters to pass to the constructor
-     * @return object|null
+     * @param  mixed   $name                Class name or service alias
+     * @param  bool    $injectDependencies  Automatically inject non-instanciator dependencies as well (methods, properties).
+     * @return object  The resulting instace
+     * @throws Exception\ExceptionInterface When an error occours during instanciation
      */
-    public function newInstance($name, array $params = []);
+    public function newInstance($name, $injectDependencies = true);
+
+    /**
+     * Inject non-constructor dependencies to the given instance
+     *
+     * @param  object  $instance  The instance to inject to
+     * @param  string  $name      Optionally the alias/class to use for resolving injections
+     * @throws Exception\ExceptionInterface
+     */
+    public function injectDependencies($instance, $name = null);
 }

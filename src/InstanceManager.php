@@ -28,9 +28,16 @@ class InstanceManager implements DependencyInjectionAwareInterface, InstanceMana
      */
     protected $sharedInstances = [];
 
+    /**
+     * @param DependencyInjectionInterface $di
+     */
+    public function __construct(DependencyInjectionInterface $di)
+    {
+        $this->di = $di;
+    }
 
     /**
-     * @see \Zend\Di\InstanceManagerInterface::get()
+     * {@inheritdoc}
      */
     public function get($name)
     {

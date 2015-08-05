@@ -12,28 +12,17 @@ namespace Zend\Di;
 use Closure;
 
 /**
- * Simple service locator implementation capable of using closures to generate instances
+ * Default service locator implementation using the dependency injector to
+ * create instances
  */
-class ServiceLocator implements ServiceLocatorInterface
+class ServiceLocator implements LocatorInterface
 {
     /**
-     * Map of service names to methods
+     * Dependency injector
      *
-     * As an example, you might define a getter method "getFoo", and map it to
-     * the service name "foo":
-     *
-     * <code>
-     * protected $map = array('foo' => 'getFoo');
-     * </code>
-     *
-     * When encountered, the return value of that method will be used.
-     *
-     * Methods mapped in this way may expect a single, array argument, the
-     * $params passed to {@link get()}, if any.
-     *
-     * @var array
+     * @var DependencyInjectionInterface
      */
-    protected $map = [];
+    protected $di;
 
     /**
      * Registered services and cached values
@@ -43,50 +32,49 @@ class ServiceLocator implements ServiceLocatorInterface
     protected $services = [];
 
     /**
-     * {@inheritDoc}
+     * @param DependencyInjectionInterface $di
+     */
+    public function __construct(DependencyInjectionInterface $di)
+    {
+        $this->di = $di;
+    }
+
+    /**
+     * Explicitly set a service
+     *
+     * @param string $name     The name of the service retrievable by get()
+     * @param object $service  The service instance
+     * @return self
      */
     public function set($name, $service)
     {
         $this->services[$name] = $service;
-
         return $this;
     }
 
     /**
-     * Retrieve a registered service
+     * Retrieve a service
      *
-     * Tests first if a value is registered for the service, and, if so,
+     * Tests first if a service is registered, and, if so,
      * returns it.
      *
-     * If the value returned is a non-object callback or closure, the return
-     * value is retrieved, stored, and returned. Parameters passed to the method
-     * are passed to the callback, but only on the first retrieval.
-     *
-     * If the service requested matches a method in the method map, the return
-     * value of that method is returned. Parameters are passed to the matching
-     * method.
+     * If the service is not yet registered, it is attempted to be created via
+     * the dependency injector and then it is stored for further use.
      *
      * @param  string $name
      * @param  array  $params
      * @return mixed
      */
-    public function get($name, array $params = [])
+    public function get($name)
     {
-        if (!isset($this->services[$name])) {
-            if (!isset($this->map[$name])) {
-                return;
-            }
-            $method = $this->map[$name];
-
-            return $this->$method($params);
+        if (isset($this->services[$name])) {
+            return $this->services[$name];
         }
 
-        $service = $this->services[$name];
-        if ($service instanceof Closure
-            || (!is_object($service) && is_callable($service))
-        ) {
-            $this->services[$name] = $service = call_user_func_array($service, $params);
-        }
+        $service = $this->di->newInstance($name, false);
+
+        $this->set($name, $service);
+        $this->di->injectDependencies($service, $name);
 
         return $service;
     }

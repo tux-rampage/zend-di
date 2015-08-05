@@ -25,12 +25,10 @@ known class definitions and instance configuration.
 The DependencyInjector would then at first attempt to use the generated
 injector for the particular type and fall back to the default routines.
 
-### Remove ServiceLocator and ServiceLocatorInterface
+### Refactor ServiceLocator and ServiceLocatorInterface
 
-These are not only leading to problems/ambugiouties with IDEs, they're also
-more part of the ServiceManager domain.
-
-The current ones are most likely never used in the real world.
+The current ones are most likely never used in the real world or by Di.
+This should be integrated better and be used for looking up instances.
 
 ### Better integration with ServiceManager
 
@@ -51,7 +49,7 @@ While the DB Adapter for Foo is taken from the ServiceManager, the auth service
 dependency for Bar is attempted to be created purely via Di. All reference to the
 ServiceManager is lost.
 
-By making the InstanceManager exchangable and change its importance it could be
+By making the InstanceManager exchangable and change its role to a ServiceLocator it could be
 replaced with a Zend\ServiceManager\ServiceLocator aware implementation where the
 instatiation handling is delegated to the service manager (Which might fire back
 to the DependencyInjector for undefined services).

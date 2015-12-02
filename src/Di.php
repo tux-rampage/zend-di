@@ -10,8 +10,10 @@
 namespace Zend\Di;
 
 use Closure;
-use Interop\Container\Exception\ContainerException;
 use Zend\Di\Exception\RuntimeException as DiRuntimeException;
+use Zend\ServiceManager\Exception\ExceptionInterface as ServiceManagerException;
+use Zend\Di\Resolver\DependencyResolver;
+use Zend\Di\Resolver\DependencyResolverInterface;
 
 /**
  * Dependency injector that can generate instances using class definitions and configured instance parameters
@@ -24,9 +26,19 @@ class Di implements DependencyInjectionInterface
     protected $definitions = null;
 
     /**
-     * @var InstanceManager
+     * @var ServiceLocatorInterface
      */
-    protected $instanceManager = null;
+    protected $serviceLocator = null;
+
+    /**
+     * @var DependencyResolverInterface
+     */
+    protected $resolver;
+
+    /**
+     * @var ConfigInterface
+     */
+    protected $config;
 
     /**
      * @var string
@@ -111,164 +123,33 @@ class Di implements DependencyInjectionInterface
      * @param null|InstanceManager $instanceManager
      * @param null|Config   $config
      */
-    public function __construct(DefinitionList $definitions = null, InstanceManager $instanceManager = null, Config $config = null)
+    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ServiceLocatorInterface $serviceLocator = null)
     {
-        $this->definitions = ($definitions) ?: new DefinitionList(new Definition\RuntimeDefinition());
-        $this->instanceManager = ($instanceManager) ?: new InstanceManager();
+        $this->definitions = $definitions? : new DefinitionList(new Definition\RuntimeDefinition());
+        $this->config = $config? : new Config();
+        $this->resolver = $resolver? : new DependencyResolver($this->definitions, $this->config);
 
-        if ($config) {
-            $this->configure($config);
-        }
+        $this->setServiceLocator($serviceLocator? : new ServiceLocator($this));
     }
 
     /**
-     * Provide a configuration object to configure this instance
+     * Set the service locator
      *
-     * @param  Config $config
-     * @return void
-     */
-    public function configure(Config $config)
-    {
-        $config->configure($this);
-    }
-
-    /**
-     * @param  DefinitionList $definitions
+     * @param  ServiceLocatorInterface $serviceLocator
      * @return self
      */
-    public function setDefinitionList(DefinitionList $definitions)
+    public function setServiceLocator(ServiceLocatorInterface $serviceLocator)
     {
-        $this->definitions = $definitions;
-
-        return $this;
-    }
-
-    /**
-     * @return DefinitionList
-     */
-    public function definitions()
-    {
-        return $this->definitions;
-    }
-
-    /**
-     * Set the instance manager
-     *
-     * @param  InstanceManager $instanceManager
-     * @return Di
-     */
-    public function setInstanceManager(InstanceManager $instanceManager)
-    {
-        $this->instanceManager = $instanceManager;
-
-        return $this;
-    }
-
-    /**
-     *
-     * @return InstanceManager
-     */
-    public function instanceManager()
-    {
-        return $this->instanceManager;
-    }
-
-    /**
-     * Utility method used to retrieve the class of a particular instance. This is here to allow extending classes to
-     * override how class names are resolved
-     *
-     * @internal this method is used by the ServiceLocator\DependencyInjectorProxy class to interact with instances
-     *           and is a hack to be used internally until a major refactor does not split the `resolveMethodParameters`. Do not
-     *           rely on its functionality.
-     * @param  object $instance
-     * @return string
-     */
-    protected function getClass($instance)
-    {
-        return get_class($instance);
-    }
-
-    /**
-     * @param $name
-     * @param array $params
-     * @param string $method
-     * @return array
-     */
-    protected function getCallParameters($name, array $params, $method = "__construct")
-    {
-        $im    = $this->instanceManager;
-        $class = $im->hasAlias($name) ? $im->getClassFromAlias($name) : $name;
-        if ($this->definitions->hasClass($class)) {
-            $callParameters = [];
-            if ($this->definitions->hasMethod($class, $method)) {
-                foreach ($this->definitions->getMethodParameters($class, $method) as $param) {
-                    if (isset($params[$param[0]])) {
-                        $callParameters[$param[0]] = $params[$param[0]];
-                    }
-                }
-            }
-            return $callParameters;
-        }
-        return $params;
-    }
-
-    /**
-     * Is the DI container capable of returning the named instance?
-     *
-     * @param string $name
-     * @return bool
-     */
-    public function has($name)
-    {
-        $definitions     = $this->definitions;
-        $instanceManager = $this->instanceManager();
-
-        $class = $instanceManager->hasAlias($name)
-            ? $instanceManager->getClassFromAlias($name)
-            : $name;
-
-        return $definitions->hasClass($class);
-    }
-
-    /**
-     * Lazy-load a class
-     *
-     * Attempts to load the class (or service alias) provided. If it has been
-     * loaded before, the previous instance will be returned (unless the service
-     * definition indicates shared instances should not be used).
-     *
-     * @param  string      $name   Class name or service alias
-     * @param  null|array  $params Parameters to pass to the constructor
-     * @return object|null
-     */
-    public function get($name, array $params = [])
-    {
-        array_push($this->instanceContext, ['GET', $name, null]);
-
-        $im = $this->instanceManager;
-
-        $callParameters = $this->getCallParameters($name, $params);
-        if ($callParameters) {
-            $fastHash = $im->hasSharedInstanceWithParameters($name, $callParameters, true);
-            if ($fastHash) {
-                array_pop($this->instanceContext);
-                return $im->getSharedInstanceWithParameters(null, [], $fastHash);
-            }
-
-            if (! $this->definitions->hasClass($name) && $im->hasSharedInstance($name)) {
-                array_pop($this->instanceContext);
-                return $im->getSharedInstance($name);
-            }
-        } elseif ($im->hasSharedInstance($name)) {
-            array_pop($this->instanceContext);
-            return $im->getSharedInstance($name);
+        if ($serviceLocator instanceof DependencyInjectionAwareInterface) {
+            $serviceLocator->setDependencyInjector($this);
         }
 
-        $config   = $im->getConfig($name);
-        $instance = $this->newInstance($name, $params, $config['shared']);
-        array_pop($this->instanceContext);
+        if ($this->resolver) {
+            $this->resolver->setServiceLocator($serviceLocator);
+        }
 
-        return $instance;
+        $this->serviceLocator = $serviceLocator;
+        return $this;
     }
 
     /**
@@ -277,21 +158,21 @@ class Di implements DependencyInjectionInterface
      * Forces retrieval of a discrete instance of the given class, using the
      * constructor parameters provided.
      *
-     * @param  mixed                            $name     Class name or service alias
-     * @param  array                            $params   Parameters to pass to the constructor
-     * @param  bool                             $isShared
+     * @param  mixed                            $name                   Class name or service alias
+     * @param  bool                             $injectAllDependencies  Set to false to only inject construction dependencis
      * @return object|null
      * @throws Exception\ClassNotFoundException
      * @throws Exception\RuntimeException
      */
-    public function newInstance($name, array $params = [], $isShared = true)
+    public function newInstance($name, $injectAllDependencies = true)
     {
         // localize dependencies
-        $definitions     = $this->definitions;
-        $instanceManager = $this->instanceManager();
+        $definitions = $this->definitions;
+        $config      = $this->config;
+        $resolver    = $this->resolver;
 
-        if ($instanceManager->hasAlias($name)) {
-            $class = $instanceManager->getClassFromAlias($name);
+        if ($config->isAlias($name)) {
+            $class = $config->getClassForAlias($name);
             $alias = $name;
         } else {
             $class = $name;
@@ -301,10 +182,10 @@ class Di implements DependencyInjectionInterface
         array_push($this->instanceContext, ['NEW', $class, $alias]);
 
         if (!$definitions->hasClass($class)) {
-            $aliasMsg = ($alias) ? '(specified by alias ' . $alias . ') ' : '';
+            $aliasMsg = ($alias) ? ' (specified by alias ' . $alias . ')' : '';
             throw new Exception\ClassNotFoundException(
-                'Class ' . $aliasMsg . $class . ' could not be located in provided definitions.'
-            );
+                'Class ' . $class . $aliasMsg . ' could not be located in provided definitions.'
+                );
         }
 
         $instantiator     = $definitions->getInstantiator($class);
@@ -316,41 +197,34 @@ class Di implements DependencyInjectionInterface
         }
 
         if ($instantiator === '__construct') {
-            $instance = $this->createInstanceViaConstructor($class, $params, $alias);
+            $instance = $this->createInstanceViaConstructor($class, $name);
             if (array_key_exists('__construct', $injectionMethods)) {
                 unset($injectionMethods['__construct']);
             }
         } elseif (is_callable($instantiator, false)) {
-            $instance = $this->createInstanceViaCallback($instantiator, $params, $alias);
+            $instance = $this->createInstanceViaCallback($instantiator, $name);
         } else {
             if (is_array($instantiator)) {
                 $msg = sprintf(
                     'Invalid instantiator: %s::%s() is not callable.',
                     isset($instantiator[0]) ? $instantiator[0] : 'NoClassGiven',
                     isset($instantiator[1]) ? $instantiator[1] : 'NoMethodGiven'
-                );
+                    );
             } else {
                 $msg = sprintf(
                     'Invalid instantiator of type "%s" for "%s".',
                     gettype($instantiator),
                     $name
-                );
+                    );
             }
             throw new Exception\RuntimeException($msg);
         }
 
-        if ($isShared) {
-            if ($callParameters = $this->getCallParameters($name, $params)) {
-                $this->instanceManager->addSharedInstanceWithParameters($instance, $name, $callParameters);
-            } else {
-                $this->instanceManager->addSharedInstance($instance, $name);
-            }
+        if ($injectAllDependencies) {
+            $this->injectDependencies($instance, $injectAllDependencies);
         }
 
-        $this->handleInjectDependencies($instance, $injectionMethods, $params, $class, $alias, $name);
-
         array_pop($this->instanceContext);
-
         return $instance;
     }
 
@@ -358,12 +232,26 @@ class Di implements DependencyInjectionInterface
      * Inject dependencies
      *
      * @param  object $instance
-     * @param  array  $params
+     * @param  string $type
      * @return void
      */
-    public function injectDependencies($instance, array $params = [])
+    public function injectDependencies($instance, $type = null)
     {
-        $definitions = $this->definitions();
+        if (!$type) {
+            $type = get_class($instance);
+        }
+
+        $definitions = $this->definitions;
+        $config      = $this->config;
+
+        if ($config->isAlias($type)) {
+            $class = $config->getClassForAlias($type);
+            $alias = $type;
+        } else {
+            $class = $type;
+            $alias = null;
+        }
+
         $class = $this->getClass($instance);
         $injectionMethods = [
             $class => ($definitions->hasClass($class)) ? $definitions->getMethods($class) : []
@@ -432,7 +320,7 @@ class Di implements DependencyInjectionInterface
                             throw new Exception\RuntimeException(
                                 'An injection was provided with a keyed index and an array of data, try using'
                                 . ' the name of a particular method as a key for your injection data.'
-                            );
+                                );
                         }
                     }
                     if ($objectsToInject) {
@@ -492,12 +380,12 @@ class Di implements DependencyInjectionInterface
                 throw new Exception\ClassNotFoundException(sprintf(
                     'Cannot instantiate interface "%s"',
                     $class
-                ));
+                    ));
             }
             throw new Exception\ClassNotFoundException(sprintf(
                 'Class "%s" does not exist; cannot instantiate',
                 $class
-            ));
+                ));
         }
 
         // Hack to avoid Reflection in most common use cases
@@ -633,8 +521,8 @@ class Di implements DependencyInjectionInterface
         // for the parent class, provided we are deeper than one node
         if (isset($this->instanceContext[0])) {
             list($requestedClass, $requestedAlias) = ($this->instanceContext[0][0] == 'NEW')
-                ? [$this->instanceContext[0][1], $this->instanceContext[0][2]]
-                : [$this->instanceContext[1][1], $this->instanceContext[1][2]];
+            ? [$this->instanceContext[0][1], $this->instanceContext[0][2]]
+            : [$this->instanceContext[1][1], $this->instanceContext[1][2]];
         } else {
             $requestedClass = $requestedAlias = null;
         }
@@ -711,39 +599,39 @@ class Di implements DependencyInjectionInterface
                 if (isset($iConfig[$thisIndex]['parameters'][$fqParamPos])
                     || isset($iConfig[$thisIndex]['parameters'][$fqParamName])
                     || isset($iConfig[$thisIndex]['parameters'][$name])) {
-                    if (isset($iConfig[$thisIndex]['parameters'][$fqParamPos])) {
-                        $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamPos];
-                    } elseif (isset($iConfig[$thisIndex]['parameters'][$fqParamName])) {
-                        $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamName];
-                    } else {
-                        $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$name];
-                    }
+                        if (isset($iConfig[$thisIndex]['parameters'][$fqParamPos])) {
+                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamPos];
+                        } elseif (isset($iConfig[$thisIndex]['parameters'][$fqParamName])) {
+                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamName];
+                        } else {
+                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$name];
+                        }
 
-                    if ($type === false && is_string($iConfigCurValue)) {
-                        $computedParams['value'][$fqParamPos] = $iConfigCurValue;
-                    } elseif (is_string($iConfigCurValue)
-                        && isset($aliases[$iConfigCurValue])) {
-                        $computedParams['retrieval'][$fqParamPos] = [
-                            $iConfig[$thisIndex]['parameters'][$name],
-                            $this->instanceManager->getClassFromAlias($iConfigCurValue)
-                        ];
-                    } elseif (is_string($iConfigCurValue)
-                        && $this->definitions->hasClass($iConfigCurValue)) {
-                        $computedParams['retrieval'][$fqParamPos] = [
-                            $iConfigCurValue,
-                            $iConfigCurValue
-                        ];
-                    } elseif (is_object($iConfigCurValue)
-                        && $iConfigCurValue instanceof Closure
-                        && $type !== 'Closure') {
-                        /* @var $iConfigCurValue Closure */
-                        $computedParams['value'][$fqParamPos] = $iConfigCurValue();
-                    } else {
-                        $computedParams['value'][$fqParamPos] = $iConfigCurValue;
+                        if ($type === false && is_string($iConfigCurValue)) {
+                            $computedParams['value'][$fqParamPos] = $iConfigCurValue;
+                        } elseif (is_string($iConfigCurValue)
+                            && isset($aliases[$iConfigCurValue])) {
+                                $computedParams['retrieval'][$fqParamPos] = [
+                                    $iConfig[$thisIndex]['parameters'][$name],
+                                    $this->instanceManager->getClassFromAlias($iConfigCurValue)
+                                ];
+                        } elseif (is_string($iConfigCurValue)
+                            && $this->definitions->hasClass($iConfigCurValue)) {
+                                $computedParams['retrieval'][$fqParamPos] = [
+                                    $iConfigCurValue,
+                                    $iConfigCurValue
+                                ];
+                        } elseif (is_object($iConfigCurValue)
+                            && $iConfigCurValue instanceof Closure
+                            && $type !== 'Closure') {
+                                /* @var $iConfigCurValue Closure */
+                                $computedParams['value'][$fqParamPos] = $iConfigCurValue();
+                        } else {
+                            $computedParams['value'][$fqParamPos] = $iConfigCurValue;
+                        }
+                        unset($iConfigCurValue);
+                        continue 2;
                     }
-                    unset($iConfigCurValue);
-                    continue 2;
-                }
             }
 
             // PRIORITY 6 - globally preferred implementations
@@ -761,7 +649,7 @@ class Di implements DependencyInjectionInterface
                             continue 2;
                         }
                         $pInstanceClass = ($this->instanceManager->hasAlias($pInstance)) ?
-                             $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
+                        $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
                         if ($pInstanceClass === $type || is_subclass_of($pInstanceClass, $type)) {
                             $computedParams['retrieval'][$fqParamPos] = [$pInstance, $pInstanceClass];
                             continue 2;
@@ -778,7 +666,7 @@ class Di implements DependencyInjectionInterface
                             continue 2;
                         }
                         $pInstanceClass = ($this->instanceManager->hasAlias($pInstance)) ?
-                             $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
+                        $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
                         if ($pInstanceClass === $type || is_subclass_of($pInstanceClass, $type)) {
                             $computedParams['retrieval'][$fqParamPos] = [$pInstance, $pInstanceClass];
                             continue 2;
@@ -806,83 +694,83 @@ class Di implements DependencyInjectionInterface
                 // detect circular dependencies! (they can only happen in instantiators)
                 if ($isInstantiator && in_array($computedParams['retrieval'][$fqParamPos][1], $this->currentDependencies)
                     && (!isset($alias) || in_array($computedParams['retrieval'][$fqParamPos][0], $this->currentAliasDependenencies))
-                ) {
-                    $msg = "Circular dependency detected: $class depends on {$value[1]} and viceversa";
+                    ) {
+                        $msg = "Circular dependency detected: $class depends on {$value[1]} and viceversa";
+                        if (isset($alias)) {
+                            $msg .= " (Aliased as $alias)";
+                        }
+                        throw new Exception\CircularDependencyException($msg);
+                    }
+
+                    array_push($this->currentDependencies, $class);
                     if (isset($alias)) {
-                        $msg .= " (Aliased as $alias)";
+                        array_push($this->currentAliasDependenencies, $alias);
                     }
-                    throw new Exception\CircularDependencyException($msg);
-                }
 
-                array_push($this->currentDependencies, $class);
-                if (isset($alias)) {
-                    array_push($this->currentAliasDependenencies, $alias);
-                }
+                    $dConfig = $this->instanceManager->getConfig($computedParams['retrieval'][$fqParamPos][0]);
 
-                $dConfig = $this->instanceManager->getConfig($computedParams['retrieval'][$fqParamPos][0]);
-
-                try {
-                    if ($dConfig['shared'] === false) {
-                        $resolvedParams[$index] = $this->newInstance($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams, false);
-                    } else {
-                        $resolvedParams[$index] = $this->get($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams);
+                    try {
+                        if ($dConfig['shared'] === false) {
+                            $resolvedParams[$index] = $this->newInstance($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams, false);
+                        } else {
+                            $resolvedParams[$index] = $this->get($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams);
+                        }
+                    } catch (DiRuntimeException $e) {
+                        if ($methodRequirementType & self::RESOLVE_STRICT) {
+                            //finally ( be aware to do at the end of flow)
+                            array_pop($this->currentDependencies);
+                            if (isset($alias)) {
+                                array_pop($this->currentAliasDependenencies);
+                            }
+                            // if this item was marked strict,
+                            // plus it cannot be resolve, and no value exist, bail out
+                            throw new Exception\MissingPropertyException(
+                                sprintf(
+                                    'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
+                                    (($value[0] === null) ? 'value' : 'instance/object')
+                                    ),
+                                $e->getCode(),
+                                $e
+                                );
+                        } else {
+                            //finally ( be aware to do at the end of flow)
+                            array_pop($this->currentDependencies);
+                            if (isset($alias)) {
+                                array_pop($this->currentAliasDependenencies);
+                            }
+                            return false;
+                        }
+                    } catch (ServiceManagerException $e) {
+                        // Zend\ServiceManager\Exception\ServiceNotCreatedException
+                        if ($methodRequirementType & self::RESOLVE_STRICT) {
+                            //finally ( be aware to do at the end of flow)
+                            array_pop($this->currentDependencies);
+                            if (isset($alias)) {
+                                array_pop($this->currentAliasDependenencies);
+                            }
+                            // if this item was marked strict,
+                            // plus it cannot be resolve, and no value exist, bail out
+                            throw new Exception\MissingPropertyException(
+                                sprintf(
+                                    'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
+                                    (($value[0] === null) ? 'value' : 'instance/object')
+                                    ),
+                                $e->getCode(),
+                                $e
+                                );
+                        } else {
+                            //finally ( be aware to do at the end of flow)
+                            array_pop($this->currentDependencies);
+                            if (isset($alias)) {
+                                array_pop($this->currentAliasDependenencies);
+                            }
+                            return false;
+                        }
                     }
-                } catch (DiRuntimeException $e) {
-                    if ($methodRequirementType & self::RESOLVE_STRICT) {
-                        //finally ( be aware to do at the end of flow)
-                        array_pop($this->currentDependencies);
-                        if (isset($alias)) {
-                            array_pop($this->currentAliasDependenencies);
-                        }
-                        // if this item was marked strict,
-                        // plus it cannot be resolve, and no value exist, bail out
-                        throw new Exception\MissingPropertyException(
-                            sprintf(
-                                'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
-                                (($value[0] === null) ? 'value' : 'instance/object')
-                            ),
-                            $e->getCode(),
-                            $e
-                        );
-                    } else {
-                        //finally ( be aware to do at the end of flow)
-                        array_pop($this->currentDependencies);
-                        if (isset($alias)) {
-                            array_pop($this->currentAliasDependenencies);
-                        }
-                        return false;
+                    array_pop($this->currentDependencies);
+                    if (isset($alias)) {
+                        array_pop($this->currentAliasDependenencies);
                     }
-                } catch (ContainerException $e) {
-                    // Exceptions thrown by nested/peered containers (e.g., zend-servicemanager)
-                    if ($methodRequirementType & self::RESOLVE_STRICT) {
-                        //finally ( be aware to do at the end of flow)
-                        array_pop($this->currentDependencies);
-                        if (isset($alias)) {
-                            array_pop($this->currentAliasDependenencies);
-                        }
-                        // if this item was marked strict,
-                        // plus it cannot be resolve, and no value exist, bail out
-                        throw new Exception\MissingPropertyException(
-                            sprintf(
-                                'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
-                                (($value[0] === null) ? 'value' : 'instance/object')
-                            ),
-                            $e->getCode(),
-                            $e
-                        );
-                    } else {
-                        //finally ( be aware to do at the end of flow)
-                        array_pop($this->currentDependencies);
-                        if (isset($alias)) {
-                            array_pop($this->currentAliasDependenencies);
-                        }
-                        return false;
-                    }
-                }
-                array_pop($this->currentDependencies);
-                if (isset($alias)) {
-                    array_pop($this->currentAliasDependenencies);
-                }
             } elseif (!array_key_exists($fqParamPos, $computedParams['optional'])) {
                 if ($methodRequirementType & self::RESOLVE_STRICT) {
                     // if this item was not marked as optional,
@@ -890,7 +778,7 @@ class Di implements DependencyInjectionInterface
                     throw new Exception\MissingPropertyException(sprintf(
                         'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
                         (($value[0] === null) ? 'value' : 'instance/object')
-                    ));
+                        ));
                 } else {
                     return false;
                 }
@@ -902,22 +790,5 @@ class Di implements DependencyInjectionInterface
         }
 
         return $resolvedParams; // return ordered list of parameters
-    }
-
-    /**
-     * Checks if the object has this class as one of its parents
-     *
-     * @see https://bugs.php.net/bug.php?id=53727
-     * @see https://github.com/zendframework/zf2/pull/1807
-     *
-     * @deprecated since zf 2.3 requires PHP >= 5.3.23
-     *
-     * @param string $className
-     * @param $type
-     * @return bool
-     */
-    protected static function isSubclassOf($className, $type)
-    {
-        return is_subclass_of($className, $type);
     }
 }

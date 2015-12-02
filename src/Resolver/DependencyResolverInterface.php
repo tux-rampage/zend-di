@@ -9,6 +9,7 @@
 
 namespace Zend\Di\Resolver;
 
+use Zend\Di\ServiceLocatorInterface;
 
 /**
  * Interface for implementing dependency resolvers
@@ -16,25 +17,15 @@ namespace Zend\Di\Resolver;
  * The dependency resolver is used by the dependency injector or the
  * code generator to gather the types and values to inject
  */
-class DependencyResolverInterface
+interface DependencyResolverInterface
 {
     /**
-     * Flag to mark the result as type name.
+     * Set the service locator to utilize
      *
-     * The injector should use the instance manager to obtain the
-     * object to inject.
+     * @param  ServiceLocatorInterface $serviceLocator  Service locator instance
+     * @return self Should provide a fluent interface
      */
-    const RESULT_TYPENAME = 0;
-
-    /**
-     * Marks the result as value
-     *
-     * The injector should use the returned value and inject
-     * it directly.
-     *
-     * The value must be scalar.
-     */
-    const RESULT_VAUE = 1;
+    public function setServiceLocator(ServiceLocatorInterface $serviceLocator);
 
     /**
      * Resolve a type prefernece
@@ -46,19 +37,13 @@ class DependencyResolverInterface
     public function resolvePreference($type, $requestedType = null);
 
     /**
-     * Resolves the type to inject into a property
-     *
-     * @param  string  $requestedType  The typename requested by DependencyInjectionInterface::newInstance()
-     * @param  string  $property       The property name to inject
-     * @return array   The resulting type and injection value: array(result, typeOrValue)
-     */
-    public function resolveProperty($requestedType, $property);
-
-    /**
      * Resolves all parameters for a method
      *
-     * @param string $requestedType
-     * @param string $method
+     * @param string $requestedType The requested type
+     * @param string $method        The method name
+     * @return array|null           Returns the injection parameters as positional array
+     *                              This array contains either the class/alias names as string
+     *                              or ValueInjection instances
      */
-    public function resolveMethodParameters($requestedType, $method);
+    public function resolveMethodParameters($requestedType, $method, $require = false);
 }

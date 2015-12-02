@@ -9,13 +9,12 @@
 
 namespace Zend\Di;
 
-use Closure;
 
 /**
  * Default service locator implementation using the dependency injector to
  * create instances
  */
-class ServiceLocator implements LocatorInterface
+class ServiceLocator implements ServiceLocatorInterface
 {
     /**
      * Dependency injector
@@ -46,10 +45,22 @@ class ServiceLocator implements LocatorInterface
      * @param object $service  The service instance
      * @return self
      */
-    public function set($name, $service)
+    public function setInstance($name, $service)
     {
         $this->services[$name] = $service;
         return $this;
+    }
+
+    /**
+     * @see \Zend\Di\ServiceLocatorInterface::provides()
+     */
+    public function provides($name)
+    {
+        if (isset($this->services[$name])) {
+            return true;
+        }
+
+        return $this->di->canInstanciate($name);
     }
 
     /**
@@ -65,7 +76,7 @@ class ServiceLocator implements LocatorInterface
      * @param  array  $params
      * @return mixed
      */
-    public function get($name)
+    public function getInstance($name)
     {
         if (isset($this->services[$name])) {
             return $this->services[$name];
@@ -73,7 +84,7 @@ class ServiceLocator implements LocatorInterface
 
         $service = $this->di->newInstance($name, false);
 
-        $this->set($name, $service);
+        $this->setInstance($name, $service);
         $this->di->injectDependencies($service, $name);
 
         return $service;

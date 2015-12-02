@@ -25,12 +25,12 @@ interface DependencyInjectionInterface
      *
      * Forces retrieval of a discrete instance of the given class.
      *
-     * @param  mixed   $name                Class name or service alias
-     * @param  bool    $injectDependencies  Automatically inject non-instanciator dependencies as well (methods, properties).
+     * @param  mixed   $name                   Class name or service alias
+     * @param  bool    $injectAllDependencies  Automatically inject non-instanciator dependencies as well (methods, properties).
      * @return object  The resulting instace
      * @throws Exception\ExceptionInterface When an error occours during instanciation
      */
-    public function newInstance($name, $injectDependencies = true);
+    public function newInstance($name, $injectAllDependencies = true);
 
     /**
      * Inject non-constructor dependencies to the given instance

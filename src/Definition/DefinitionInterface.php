@@ -77,15 +77,16 @@ interface DefinitionInterface
     /**
      * getMethodParameters() return information about a methods parameters.
      *
-     * Should return an ordered named array of parameters for a given method.
+     * Should return an ordered named array of parameters for a given method. The keys
+     * should represent the full qualified parameter position.
      * Each value should be an array, of length 4 with the following information:
      *
-     * array(
-     *     0, // string|null: Type Name (if it exists)
-     *     1, // bool: whether this param is required
-     *     2, // string: fully qualified path to this parameter
-     *     3, // mixed: default value
-     * );
+     * <ol>
+     *   <li>[string] The parameter name</li>
+     *   <li>[string|null] The required type. If this is null any type might be acceptable</li>
+     *   <li>[bool] Flag if the parameter is required</li>
+     *   <li>[mixed] The default value for this parameter</li>
+     * </ol>
      *
      * @param  string $class
      * @param  string $method

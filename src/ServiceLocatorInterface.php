@@ -9,13 +9,25 @@
 
 namespace Zend\Di;
 
-interface LocatorInterface
+
+/**
+ * Interface for implementing di service locators
+ */
+interface ServiceLocatorInterface
 {
     /**
-     * Retrieve a class instance
+     * Check if the service locator can provide the given type or service name
+     *
+     * @return bool
+     */
+    public function provides($name);
+
+
+    /**
+     * Retrieve a service instance
      *
      * @param  string      $name   Class or service name
      * @return object|null
      */
-    public function get($name);
+    public function getInstance($name);
 }

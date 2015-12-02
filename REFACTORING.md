@@ -9,14 +9,8 @@ the Di component with possible BC breaks (much like the proposed ServiceManager 
 
   * The ZF2 code has duplications (namingly the compiler and runtime definition)
   * The resolver code is uneccessary complex and should be put into a separate implementation
-  * The InstanceManager should be interfaced and be exchangeible
-
-### Add support for property injections
-
-  * Use PHP 7 Typehints generating the definition.
-  * Should fallback to @var annotations
-  * Properties will be optional unless they're annotated with @Inject
-  * Only (single)typed properties are injectable
+  * The InstanceManager should bereplaced by the service locator interface
+  * The service locator should be exchangible
 
 ### Add support for generating an optimized di container
 

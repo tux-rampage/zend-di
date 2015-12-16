@@ -16,9 +16,15 @@ use PHPUnit_Framework_TestCase as TestCase;
 use Zend\Di\Definition\DefinitionInterface;
 
 
+/**
+ * @coversDefaultClass Zend\Di\Resolver\DependencyResolver
+ */
 class DependencyResolverTest extends TestCase
 {
-    public function globlTypePreferenceTestDataProvider()
+    /**
+     * @return array
+     */
+    public function globalTypePreferenceTestDataProvider()
     {
         return [
             [
@@ -40,6 +46,7 @@ class DependencyResolverTest extends TestCase
     /**
      * Tests the resolve preference code for specific configurations and definitions
      *
+     * @dataProvider globalTypePreferenceTestDataProvider
      * @covers ::resolvePreference
      *
      * @param string $type

@@ -52,7 +52,7 @@ class ValueInjection
     }
 
     /**
-     * Checks wether the falue can be exported for code generation or not
+     * Checks wether the value can be exported for code generation or not
      *
      * @return bool
      */

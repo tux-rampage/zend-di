@@ -9,10 +9,9 @@
 
 namespace Zend\Di\Resolver;
 
-use Zend\View\Resolver\ResolverInterface;
-use Zend\Di\DefinitionList;
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\ConfigInterface;
+use Zend\Di\ServiceLocatorInterface;
 
 /**
  * The default resolver implementation
@@ -28,6 +27,11 @@ class DependencyResolver implements DependencyResolverInterface
      * @var DefinitionInterface
      */
     protected $definition;
+
+    /**
+     * @var ServiceLocatorInterface
+     */
+    protected $serviceLocator = null;
 
     /**
      * @var string[]
@@ -46,19 +50,27 @@ class DependencyResolver implements DependencyResolverInterface
         $this->config = $config;
     }
 
+    /**
+     * Returns the configured injections for the requested type
+     *
+     * If type is an alias it will try to fall back to the class configuration
+     *
+     * @param  string $requestedType  The type name to get injections for
+     * @param  string $method         The method name
+     * @return array                  Injections for the method indexed by the parameter name
+     */
     protected function getConfiguredInjections($requestedType, $method)
     {
         // Are there any injections defined?
         $injections = $this->config->getInjections($requestedType, $method);
 
-        if ($this->config->isAlias($requestedType))
-            $class = $this->config->isAlias($requestedType)? $this->config->getClassForAlias($requestedType) : $requestedType;
-            $superTypes = $this->definition->getClassSupertypes($class);
+        if (empty($injections) && $this->config->isAlias($requestedType)) {
+            $class = $this->config->getClassForAlias($requestedType);
 
-
-        if (empty($injections) || in_array('*', $injections)) {
+            return $this->config->getInjections($class, $method);
         }
 
+        return $injections;
     }
 
     /**
@@ -116,6 +128,15 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
+     * @see \Zend\Di\Resolver\DependencyResolverInterface::setServiceLocator()
+     */
+    public function setServiceLocator(ServiceLocatorInterface $serviceLocator)
+    {
+        $this->serviceLocator = $serviceLocator;
+        return $this;
+    }
+
+    /**
      * @see \Zend\Di\Resolver\DependencyResolverInterface::resolveMethodParameters()
      */
     public function resolveMethodParameters($requestedType, $method)
@@ -127,7 +148,7 @@ class DependencyResolver implements DependencyResolverInterface
             $class = $this->config->getClassForAlias($requestedType);
         }
 
-        if (empty($injections)) {
+        if (empty($injections)) { // Make sure null won't fail
             $injections = [];
         }
 
@@ -155,7 +176,7 @@ class DependencyResolver implements DependencyResolverInterface
                     continue;
                 }
 
-                // Finally check if the injection value can be used to fulfil the requirement
+                // Finally check if the injection value can be used to fulfill the requirement
                 if ($this->isInstanceOf($injection, $type)) {
                     $result[] = new ValueInjection($injection);
                     continue;
@@ -192,7 +213,4 @@ class DependencyResolver implements DependencyResolverInterface
         // TODO Auto-generated method stub
 
     }
-
-
-
 }

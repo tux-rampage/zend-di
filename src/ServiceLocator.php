@@ -9,12 +9,14 @@
 
 namespace Zend\Di;
 
+use Interop\Container\ContainerInterface;
+
 
 /**
  * Default service locator implementation using the dependency injector to
  * create instances
  */
-class ServiceLocator implements ServiceLocatorInterface
+class ServiceLocator implements ContainerInterface
 {
     /**
      * Dependency injector
@@ -52,9 +54,9 @@ class ServiceLocator implements ServiceLocatorInterface
     }
 
     /**
-     * @see \Zend\Di\ServiceLocatorInterface::provides()
+     * @see \Interop\Container\ContainerInterface::has()
      */
-    public function provides($name)
+    public function has($name)
     {
         if (isset($this->services[$name])) {
             return true;
@@ -72,11 +74,11 @@ class ServiceLocator implements ServiceLocatorInterface
      * If the service is not yet registered, it is attempted to be created via
      * the dependency injector and then it is stored for further use.
      *
+     * @see \Interop\Container\ContainerInterface::get()
      * @param  string $name
-     * @param  array  $params
      * @return mixed
      */
-    public function getInstance($name)
+    public function get($name)
     {
         if (isset($this->services[$name])) {
             return $this->services[$name];

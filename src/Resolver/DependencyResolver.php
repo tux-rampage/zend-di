@@ -12,6 +12,7 @@ namespace Zend\Di\Resolver;
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\ConfigInterface;
 use Zend\Di\ServiceLocatorInterface;
+use Interop\Container\ContainerInterface;
 
 /**
  * The default resolver implementation
@@ -29,7 +30,7 @@ class DependencyResolver implements DependencyResolverInterface
     protected $definition;
 
     /**
-     * @var ServiceLocatorInterface
+     * @var ContainerInterface
      */
     protected $serviceLocator = null;
 
@@ -74,7 +75,7 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
-     * Check if $type sadisfies $requiredType
+     * Check if $type satisfies $requiredType
      *
      * @param  string $type          The type to check
      * @param  string $requiredType  The required type to check against
@@ -130,10 +131,42 @@ class DependencyResolver implements DependencyResolverInterface
     /**
      * @see \Zend\Di\Resolver\DependencyResolverInterface::setServiceLocator()
      */
-    public function setServiceLocator(ServiceLocatorInterface $serviceLocator)
+    public function setServiceLocator(ContainerInterface $serviceLocator)
     {
         $this->serviceLocator = $serviceLocator;
         return $this;
+    }
+
+    /**
+     * Check if the value is a candidate for injection
+     *
+     * If this is the case return the injectable representation
+     *
+     * @param mixed $value
+     * @param string $requiredType
+     * @return null|string|ValueInjection
+     */
+    protected function checkValueToInject($value, $requiredType)
+    {
+        // Case: The definition does not require a type - any value is allowed
+        if (!$requiredType) {
+            return new ValueInjection($value);
+        }
+
+        // Case: Definition requires a class or interface
+        // -> Use configured injection only if it is a string that contains a typename which satisfies the
+        //    required type
+        if (is_string($value) && !$this->isInternalType($requiredType) && $this->isTypeOf($value, $requiredType)) {
+            return $value;
+        }
+
+        // Finally check if the injection value can be used to fulfill the requirement
+        if ($this->isInstanceOf($value, $requiredType)) {
+            return new ValueInjection($value);
+        }
+
+        // Not applicable
+        return null;
     }
 
     /**
@@ -155,32 +188,23 @@ class DependencyResolver implements DependencyResolverInterface
         $result = [];
         $params = $this->definition->getMethodParameters($class, $method);
 
-        foreach ($params as $pramInfo) {
-            list($name, $type, $isRequired, $default) = $pramInfo;
+        foreach ($params as $paramInfo) {
+            $name = $paramInfo->name;
+            $type = $paramInfo->type;
+            $isRequired = $paramInfo->isRequired;
+            $default = $paramInfo->default;
+
+            // There is a directly provided injection - This should only apply to instanciators
+            // No attempt is made to resolve anything it's taken as it is
+            if (isset($params[$name])) {
+                $result[] = new ValueInjection($params[$name]);
+                continue;
+            }
 
             // There is a configured injection and it should not use the type preferences
-            if (isset($injections[$name]) && ($injections[$name] != '*')) {
-                $injection = $injections[$name];
-
-                // Case: The definition does not require a type - any value is allowed
-                if (!$type) {
-                    $result[] = new ValueInjection($injection);
-                    continue;
-                }
-
-                // Case: Definition requires a class or interface
-                // -> Use configured injection only if it is a string that contains a typename which sadisfies the
-                //    required type
-                if (is_string($injection) && !$this->isInternalType($type) && $this->isTypeOf($injection, $type)) {
-                    $result[] = $injection;
-                    continue;
-                }
-
-                // Finally check if the injection value can be used to fulfill the requirement
-                if ($this->isInstanceOf($injection, $type)) {
-                    $result[] = new ValueInjection($injection);
-                    continue;
-                }
+            if (isset($injections[$name]) && ($injections[$name] != '*') && (null !== ($injection = $this->checkValueToInject($injections[$name], $type)))) {
+                $result[] = $injection;
+                continue;
             }
 
             // No match in configured injections try to find the type preference
@@ -208,9 +232,17 @@ class DependencyResolver implements DependencyResolverInterface
     /**
      * @see \Zend\Di\Resolver\DependencyResolverInterface::resolvePreference()
      */
-    public function resolvePreference($type, $requestedType = null)
+    public function resolvePreference($dependencyType, $requestedType = null)
     {
-        // TODO Auto-generated method stub
+        $preferences = $this->config->getTypePreferencesForClass($dependencyType, $requestedType);
+        $preferences = array_merge($preferences, $this->config->getTypePreferences($dependencyType));
 
+        foreach ($preferences as $preference) {
+            if ($this->isTypeOf($preference, $dependencyType) && $this->serviceLocator->has($preference)) {
+                return $preference;
+            }
+        }
+
+        return null;
     }
 }

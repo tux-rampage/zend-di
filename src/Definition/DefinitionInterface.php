@@ -35,8 +35,13 @@ interface DefinitionInterface
     public function getClassSupertypes($class);
 
     /**
-     * @param  string       $class
-     * @return string|array
+     * Returns the instanciator for the class
+     *
+     * The instanciator must be either a static method name of the class, or
+     * "__construct"
+     *
+     * @param  string $class
+     * @return string
      */
     public function getInstantiator($class);
 
@@ -57,7 +62,7 @@ interface DefinitionInterface
     public function getMethods($class);
 
     /**
-     * Check whether the the method exists for the given class
+     * Check whether the the method is defined as injectable for the given class
      *
      * @param  string $class
      * @param  string $method
@@ -78,19 +83,11 @@ interface DefinitionInterface
      * getMethodParameters() return information about a methods parameters.
      *
      * Should return an ordered named array of parameters for a given method. The keys
-     * should represent the full qualified parameter position.
-     * Each value should be an array, of length 4 with the following information:
-     *
-     * <ol>
-     *   <li>[string] The parameter name</li>
-     *   <li>[string|null] The required type. If this is null any type might be acceptable</li>
-     *   <li>[bool] Flag if the parameter is required</li>
-     *   <li>[mixed] The default value for this parameter</li>
-     * </ol>
+     * should represent the parameter name as defined in code.
      *
      * @param  string $class
      * @param  string $method
-     * @return array
+     * @return MethodParameter[]
      */
     public function getMethodParameters($class, $method);
 }

@@ -14,6 +14,7 @@ use Zend\Di\Exception\RuntimeException as DiRuntimeException;
 use Zend\ServiceManager\Exception\ExceptionInterface as ServiceManagerException;
 use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
+use Interop\Container\ContainerInterface;
 
 /**
  * Dependency injector that can generate instances using class definitions and configured instance parameters
@@ -39,6 +40,13 @@ class Di implements DependencyInjectionInterface
      * @var ConfigInterface
      */
     protected $config;
+
+    /**
+     * All already created instances in the current newInstance() process
+     *
+     * @var array
+     */
+    protected $currentInstances = [];
 
     /**
      * @var string
@@ -81,37 +89,16 @@ class Di implements DependencyInjectionInterface
     const RESOLVE_STRICT = 2;
 
     /**
-     *
      * use only specified parameters
      */
     const METHOD_IS_OPTIONAL = 0;
 
     /**
-     *
-     * resolve mode RESOLVE_EAGER
-     */
-    const METHOD_IS_AWARE = 1;
-
-    /**
-     *
-     * resolve mode RESOLVE_EAGER | RESOLVE_STRICT
-     */
-    const METHOD_IS_CONSTRUCTOR = 3;
-
-    /**
-     *
-     * resolve mode RESOLVE_EAGER | RESOLVE_STRICT
-     */
-    const METHOD_IS_INSTANTIATOR = 3;
-
-    /**
-     *
      * resolve mode RESOLVE_EAGER | RESOLVE_STRICT
      */
     const METHOD_IS_REQUIRED = 3;
 
     /**
-     *
      * resolve mode RESOLVE_EAGER
      */
     const METHOD_IS_EAGER = 1;
@@ -123,7 +110,7 @@ class Di implements DependencyInjectionInterface
      * @param null|InstanceManager $instanceManager
      * @param null|Config   $config
      */
-    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ServiceLocatorInterface $serviceLocator = null)
+    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $serviceLocator = null)
     {
         $this->definitions = $definitions? : new DefinitionList(new Definition\RuntimeDefinition());
         $this->config = $config? : new Config();
@@ -135,10 +122,10 @@ class Di implements DependencyInjectionInterface
     /**
      * Set the service locator
      *
-     * @param  ServiceLocatorInterface $serviceLocator
+     * @param  ContainerInterface $serviceLocator
      * @return self
      */
-    public function setServiceLocator(ServiceLocatorInterface $serviceLocator)
+    public function setServiceLocator(ContainerInterface $serviceLocator)
     {
         if ($serviceLocator instanceof DependencyInjectionAwareInterface) {
             $serviceLocator->setDependencyInjector($this);
@@ -153,36 +140,50 @@ class Di implements DependencyInjectionInterface
     }
 
     /**
+     * Returns the class name for the requested type
+     *
+     * This abstraction allows to exchange the requested class name with a proxy class
+     *
+     * @todo  Implement subscriber support
+     * @param string $type
+     */
+    protected function getClassName($type)
+    {
+        if ($this->config->isAlias($type)) {
+            return $this->config->getClassForAlias($type);
+        }
+
+        return $type;
+    }
+
+    /**
      * Retrieve a new instance of a class
      *
-     * Forces retrieval of a discrete instance of the given class, using the
-     * constructor parameters provided.
+     * Forces retrieval of a discrete instance of the given class, using the optionally provided
+     * constructor parameters.
      *
      * @param  mixed                            $name                   Class name or service alias
+     * @param  array                            $parameters             Constructor paramters
      * @param  bool                             $injectAllDependencies  Set to false to only inject construction dependencis
      * @return object|null
      * @throws Exception\ClassNotFoundException
      * @throws Exception\RuntimeException
      */
-    public function newInstance($name, $injectAllDependencies = true)
+    public function newInstance($name, array $parameters = [], $injectAllDependencies = true)
     {
         // localize dependencies
         $definitions = $this->definitions;
-        $config      = $this->config;
-        $resolver    = $this->resolver;
+        $class = $this->getClassName($name);
 
-        if ($config->isAlias($name)) {
-            $class = $config->getClassForAlias($name);
-            $alias = $name;
-        } else {
-            $class = $name;
-            $alias = null;
+        // Minimize cycle failures
+        if ($this->currentInstances[$name] && !count($this->instanceContext)) {
+            return $this->currentInstances[$name];
         }
 
-        array_push($this->instanceContext, ['NEW', $class, $alias]);
+        array_push($this->instanceContext, ['NEW', $class, $name]);
 
         if (!$definitions->hasClass($class)) {
-            $aliasMsg = ($alias) ? ' (specified by alias ' . $alias . ')' : '';
+            $aliasMsg = ($name != $class) ? ' (specified by alias ' . $name . ')' : '';
             throw new Exception\ClassNotFoundException(
                 'Class ' . $class . $aliasMsg . ' could not be located in provided definitions.'
                 );
@@ -196,81 +197,87 @@ class Di implements DependencyInjectionInterface
             $injectionMethods[$supertype] = $definitions->getMethods($supertype);
         }
 
-        if ($instantiator === '__construct') {
-            $instance = $this->createInstanceViaConstructor($class, $name);
-            if (array_key_exists('__construct', $injectionMethods)) {
-                unset($injectionMethods['__construct']);
-            }
-        } elseif (is_callable($instantiator, false)) {
-            $instance = $this->createInstanceViaCallback($instantiator, $name);
-        } else {
-            if (is_array($instantiator)) {
-                $msg = sprintf(
-                    'Invalid instantiator: %s::%s() is not callable.',
-                    isset($instantiator[0]) ? $instantiator[0] : 'NoClassGiven',
-                    isset($instantiator[1]) ? $instantiator[1] : 'NoMethodGiven'
-                    );
-            } else {
-                $msg = sprintf(
-                    'Invalid instantiator of type "%s" for "%s".',
-                    gettype($instantiator),
-                    $name
-                    );
-            }
-            throw new Exception\RuntimeException($msg);
+        try {
+            $instance = $this->createInstance($name, $instantiator, $parameters, $class);
+        } catch (\Exception $e) {
+            $this->instanceContext = [];
+            $this->currentInstances = [];
+            throw $e;
         }
+
+        $this->currentInstances[$name] = $instance;
+        array_pop($this->instanceContext);
 
         if ($injectAllDependencies) {
-            $this->injectDependencies($instance, $injectAllDependencies);
+            $this->doInjectDependencies($instance, $class, $name, count($this->instanceContext));
         }
 
-        array_pop($this->instanceContext);
+        if (!count($this->instanceContext)) {
+            $this->currentInstances = [];
+        }
+
         return $instance;
     }
 
     /**
      * Inject dependencies
      *
-     * @param  object $instance
-     * @param  string $type
+     * @param  object $instance  The target instance to inject dependencies to
+     * @param  string $type      The typename to use for resolving the dependencies
      * @return void
      */
     public function injectDependencies($instance, $type = null)
     {
+        $class = get_class($instance);
         if (!$type) {
-            $type = get_class($instance);
+            $type = $class;
         }
 
-        $definitions = $this->definitions;
-        $config      = $this->config;
-
-        if ($config->isAlias($type)) {
-            $class = $config->getClassForAlias($type);
-            $alias = $type;
-        } else {
-            $class = $type;
-            $alias = null;
-        }
-
-        $class = $this->getClass($instance);
-        $injectionMethods = [
-            $class => ($definitions->hasClass($class)) ? $definitions->getMethods($class) : []
-        ];
-        $parent = $class;
-        while ($parent = get_parent_class($parent)) {
-            if ($definitions->hasClass($parent)) {
-                $injectionMethods[$parent] = $definitions->getMethods($parent);
-            }
-        }
-        foreach (class_implements($class) as $interface) {
-            if ($definitions->hasClass($interface)) {
-                $injectionMethods[$interface] = $definitions->getMethods($interface);
-            }
-        }
-        $this->handleInjectDependencies($instance, $injectionMethods, $params, $class, null, null);
+        $this->doInjectDependencies($instance, $class, $type);
     }
 
     /**
+     * @param unknown $instance
+     * @param unknown $class
+     * @param unknown $type
+     * @param unknown $allowDelay
+     * @return self
+     */
+    protected function doInjectDependencies($instance, $class, $type, $allowDelay = false)
+    {
+        array_push($this->instanceContext, ['INJECT', $class, $type]);
+
+        $class = $this->getClassName($type);
+        $definitions = $this->definitions;
+        $visitedMethods = [];
+
+        if (null !== ($instanciator = $definitions->getInstantiator($class))) {
+            $visitedMethods[] = $instanciator;
+        }
+
+        foreach ($definitions->getMethods($type) as $method) {
+            if (in_array($method, $visitedMethods)) {
+                continue;
+            }
+
+            $this->handleInjectDependency($instance, $method, $class, $type, $allowDelay);
+            $visitedMethods[] = $method;
+        }
+
+        foreach ($definitions->getClassSupertypes($class) as $superType) {
+            foreach ($definitions->getMethods($superType) as $method) {
+                if (in_array($method, $visitedMethods)) {
+                    continue;
+                }
+
+                $this->handleInjectDependency($instance, $method, $class, $type, $allowDelay);
+                $visitedMethods[] = $method;
+            }
+        }
+    }
+
+    /**
+     * @todo Refactor
      * @param object      $instance
      * @param array       $injectionMethods
      * @param array       $params
@@ -279,12 +286,26 @@ class Di implements DependencyInjectionInterface
      * @param  string                     $requestedName
      * @throws Exception\RuntimeException
      */
-    protected function handleInjectDependencies($instance, $injectionMethods, $params, $instanceClass, $instanceAlias, $requestedName)
+    protected function handleInjectDependency($instance, $method, $instanceClass, $instanceType, $allowDelay = false)
     {
         // localize dependencies
-        $definitions     = $this->definitions;
-        $instanceManager = $this->instanceManager();
+        $definitions = $this->definitions;
+        $container   = $this->serviceLocator;
 
+        try {
+            $params = $this->resolveMethodParameters($instanceType, $method);
+
+            if ($params == null) {
+                return;
+            }
+
+            call_user_func_array([$instance, $method], $params);
+        } catch (Exception\ExceptionInterface $e) {
+            // TODO: Delay?
+        }
+
+
+        //FIXME: GO ON!
         $calledMethods = ['__construct' => true];
 
         if ($injectionMethods) {
@@ -359,21 +380,18 @@ class Di implements DependencyInjectionInterface
     /**
      * Retrieve a class instance based on class name
      *
-     * Any parameters provided will be used as constructor arguments. If any
-     * given parameter is a DependencyReference object, it will be fetched
-     * from the container so that the instance may be injected.
+     * Any parameters provided will be used as constructor arguments.
      *
      * @param  string      $class
+     * @param  string      $instanciator
      * @param  array       $params
-     * @param  string|null $alias
+     * @param  string|null $class
      * @return object
      */
-    protected function createInstanceViaConstructor($class, $params, $alias = null)
+    protected function createInstance($name, $instanciator, $params, $class = null)
     {
-        $callParameters = [];
-        if ($this->definitions->hasMethod($class, '__construct')) {
-            $callParameters = $this->resolveMethodParameters($class, '__construct', $params, $alias, self::METHOD_IS_CONSTRUCTOR, true);
-        }
+        $callParameters = $params;
+        $class = $class? : $name;
 
         if (!class_exists($class)) {
             if (interface_exists($class)) {
@@ -382,10 +400,15 @@ class Di implements DependencyInjectionInterface
                     $class
                     ));
             }
+
             throw new Exception\ClassNotFoundException(sprintf(
                 'Class "%s" does not exist; cannot instantiate',
                 $class
                 ));
+        }
+
+        if ($this->definitions->hasMethod($name, $instanciator)) {
+            $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, self::METHOD_IS_INSTANTIATOR);
         }
 
         // Hack to avoid Reflection in most common use cases
@@ -400,42 +423,8 @@ class Di implements DependencyInjectionInterface
                 return new $class($callParameters[0], $callParameters[1], $callParameters[2]);
             default:
                 $r = new \ReflectionClass($class);
-
                 return $r->newInstanceArgs($callParameters);
         }
-    }
-
-    /**
-     * Get an object instance from the defined callback
-     *
-     * @param  callable                           $callback
-     * @param  array                              $params
-     * @param  string                             $alias
-     * @return object
-     * @throws Exception\InvalidCallbackException
-     * @throws Exception\RuntimeException
-     */
-    protected function createInstanceViaCallback($callback, $params, $alias)
-    {
-        if (!is_callable($callback)) {
-            throw new Exception\InvalidCallbackException('An invalid constructor callback was provided');
-        }
-
-        if (is_array($callback)) {
-            $class = (is_object($callback[0])) ? $this->getClass($callback[0]) : $callback[0];
-            $method = $callback[1];
-        } elseif (is_string($callback) && strpos($callback, '::') !== false) {
-            list($class, $method) = explode('::', $callback, 2);
-        } else {
-            throw new Exception\RuntimeException('Invalid callback type provided to ' . __METHOD__);
-        }
-
-        $callParameters = [];
-        if ($this->definitions->hasMethod($class, $method)) {
-            $callParameters = $this->resolveMethodParameters($class, $method, $params, $alias, self::METHOD_IS_INSTANTIATOR, true);
-        }
-
-        return call_user_func_array($callback, $callParameters);
     }
 
     /**
@@ -471,324 +460,35 @@ class Di implements DependencyInjectionInterface
      *
      * @param  string                                $class
      * @param  string                                $method
-     * @param  array                                 $callTimeUserParams
-     * @param  string                                $alias
-     * @param  int|bool                              $methodRequirementType
-     * @param  bool                                  $isInstantiator
+     * @param  array                                 $params
+     * @param  int                                   $methodRequirementType
      * @throws Exception\MissingPropertyException
      * @throws Exception\CircularDependencyException
-     * @return array
+     * @return array|null
      */
-    protected function resolveMethodParameters($class, $method, array $callTimeUserParams, $alias, $methodRequirementType, $isInstantiator = false)
+    protected function resolveMethodParameters($class, $method, array $params = [], $methodRequirementType = self::METHOD_IS_OPTIONAL)
     {
-        //for BC
-        if (is_bool($methodRequirementType)) {
-            if ($isInstantiator) {
-                $methodRequirementType = Di::METHOD_IS_INSTANTIATOR;
-            } elseif ($methodRequirementType) {
-                $methodRequirementType = Di::METHOD_IS_REQUIRED;
-            } else {
-                $methodRequirementType = Di::METHOD_IS_OPTIONAL;
-            }
-        }
-        // parameters for this method, in proper order, to be returned
-        $resolvedParams = [];
+        $container = $this->serviceLocator;
+        $resolved = $this->resolver->resolveMethodParameters($class, $method, $params);
+        $params = [];
 
-        // parameter requirements from the definition
-        $injectionMethodParameters = $this->definitions->getMethodParameters($class, $method);
-
-        // computed parameters array
-        $computedParams = [
-            'value'     => [],
-            'retrieval' => [],
-            'optional'  => []
-        ];
-
-        // retrieve instance configurations for all contexts
-        $iConfig = [];
-        $aliases = $this->instanceManager->getAliases();
-
-        // for the alias in the dependency tree
-        if ($alias && $this->instanceManager->hasConfig($alias)) {
-            $iConfig['thisAlias'] = $this->instanceManager->getConfig($alias);
-        }
-
-        // for the current class in the dependency tree
-        if ($this->instanceManager->hasConfig($class)) {
-            $iConfig['thisClass'] = $this->instanceManager->getConfig($class);
-        }
-
-        // for the parent class, provided we are deeper than one node
-        if (isset($this->instanceContext[0])) {
-            list($requestedClass, $requestedAlias) = ($this->instanceContext[0][0] == 'NEW')
-            ? [$this->instanceContext[0][1], $this->instanceContext[0][2]]
-            : [$this->instanceContext[1][1], $this->instanceContext[1][2]];
-        } else {
-            $requestedClass = $requestedAlias = null;
-        }
-
-        if ($requestedClass != $class && $this->instanceManager->hasConfig($requestedClass)) {
-            $iConfig['requestedClass'] = $this->instanceManager->getConfig($requestedClass);
-
-            if (array_key_exists('parameters', $iConfig['requestedClass'])) {
-                $newParameters = [];
-
-                foreach ($iConfig['requestedClass']['parameters'] as $name => $parameter) {
-                    $newParameters[$requestedClass.'::'.$method.'::'.$name] = $parameter;
-                }
-
-                $iConfig['requestedClass']['parameters'] = $newParameters;
-            }
-
-            if ($requestedAlias) {
-                $iConfig['requestedAlias'] = $this->instanceManager->getConfig($requestedAlias);
-            }
-        }
-
-        // This is a 2 pass system for resolving parameters
-        // first pass will find the sources, the second pass will order them and resolve lookups if they exist
-        // MOST methods will only have a single parameters to resolve, so this should be fast
-
-        foreach ($injectionMethodParameters as $fqParamPos => $info) {
-            list($name, $type, $isRequired) = $info;
-
-            $fqParamName = substr_replace($fqParamPos, ':' . $info[0], strrpos($fqParamPos, ':'));
-
-            // PRIORITY 1 - consult user provided parameters
-            if (isset($callTimeUserParams[$fqParamPos]) || isset($callTimeUserParams[$name])) {
-                if (isset($callTimeUserParams[$fqParamPos])) {
-                    $callTimeCurValue =& $callTimeUserParams[$fqParamPos];
-                } elseif (isset($callTimeUserParams[$fqParamName])) {
-                    $callTimeCurValue =& $callTimeUserParams[$fqParamName];
-                } else {
-                    $callTimeCurValue =& $callTimeUserParams[$name];
-                }
-
-                if ($type !== false && is_string($callTimeCurValue)) {
-                    if ($this->instanceManager->hasAlias($callTimeCurValue)) {
-                        // was an alias provided?
-                        $computedParams['retrieval'][$fqParamPos] = [
-                            $callTimeUserParams[$name],
-                            $this->instanceManager->getClassFromAlias($callTimeCurValue)
-                        ];
-                    } elseif ($this->definitions->hasClass($callTimeUserParams[$name])) {
-                        // was a known class provided?
-                        $computedParams['retrieval'][$fqParamPos] = [
-                            $callTimeCurValue,
-                            $callTimeCurValue
-                        ];
-                    } else {
-                        // must be a value
-                        $computedParams['value'][$fqParamPos] = $callTimeCurValue;
-                    }
-                } else {
-                    // int, float, null, object, etc
-                    $computedParams['value'][$fqParamPos] = $callTimeCurValue;
-                }
-                unset($callTimeCurValue);
+        foreach ($resolved as $position => $arg) {
+            if ($arg instanceof Resolver\ValueInjection) {
+                $params[] = $arg->getValue();
                 continue;
             }
 
-            // PRIORITY 2 -specific instance configuration (thisAlias) - this alias
-            // PRIORITY 3 -THEN specific instance configuration (thisClass) - this class
-            // PRIORITY 4 -THEN specific instance configuration (requestedAlias) - requested alias
-            // PRIORITY 5 -THEN specific instance configuration (requestedClass) - requested class
-
-            foreach (['thisAlias', 'thisClass', 'requestedAlias', 'requestedClass'] as $thisIndex) {
-                // check the provided parameters config
-                if (isset($iConfig[$thisIndex]['parameters'][$fqParamPos])
-                    || isset($iConfig[$thisIndex]['parameters'][$fqParamName])
-                    || isset($iConfig[$thisIndex]['parameters'][$name])) {
-                        if (isset($iConfig[$thisIndex]['parameters'][$fqParamPos])) {
-                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamPos];
-                        } elseif (isset($iConfig[$thisIndex]['parameters'][$fqParamName])) {
-                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$fqParamName];
-                        } else {
-                            $iConfigCurValue =& $iConfig[$thisIndex]['parameters'][$name];
-                        }
-
-                        if ($type === false && is_string($iConfigCurValue)) {
-                            $computedParams['value'][$fqParamPos] = $iConfigCurValue;
-                        } elseif (is_string($iConfigCurValue)
-                            && isset($aliases[$iConfigCurValue])) {
-                                $computedParams['retrieval'][$fqParamPos] = [
-                                    $iConfig[$thisIndex]['parameters'][$name],
-                                    $this->instanceManager->getClassFromAlias($iConfigCurValue)
-                                ];
-                        } elseif (is_string($iConfigCurValue)
-                            && $this->definitions->hasClass($iConfigCurValue)) {
-                                $computedParams['retrieval'][$fqParamPos] = [
-                                    $iConfigCurValue,
-                                    $iConfigCurValue
-                                ];
-                        } elseif (is_object($iConfigCurValue)
-                            && $iConfigCurValue instanceof Closure
-                            && $type !== 'Closure') {
-                                /* @var $iConfigCurValue Closure */
-                                $computedParams['value'][$fqParamPos] = $iConfigCurValue();
-                        } else {
-                            $computedParams['value'][$fqParamPos] = $iConfigCurValue;
-                        }
-                        unset($iConfigCurValue);
-                        continue 2;
-                    }
-            }
-
-            // PRIORITY 6 - globally preferred implementations
-
-            // next consult alias level preferred instances
-            // RESOLVE_EAGER wants to inject the cross-cutting concerns.
-            // If you want to retrieve an instance from TypePreferences,
-            // use AwareInterface or specify the method requirement option METHOD_IS_EAGER at ClassDefinition
-            if ($methodRequirementType & self::RESOLVE_EAGER) {
-                if ($alias && $this->instanceManager->hasTypePreferences($alias)) {
-                    $pInstances = $this->instanceManager->getTypePreferences($alias);
-                    foreach ($pInstances as $pInstance) {
-                        if (is_object($pInstance)) {
-                            $computedParams['value'][$fqParamPos] = $pInstance;
-                            continue 2;
-                        }
-                        $pInstanceClass = ($this->instanceManager->hasAlias($pInstance)) ?
-                        $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
-                        if ($pInstanceClass === $type || is_subclass_of($pInstanceClass, $type)) {
-                            $computedParams['retrieval'][$fqParamPos] = [$pInstance, $pInstanceClass];
-                            continue 2;
-                        }
-                    }
+            if (($arg === null) || !$container->has($arg)) {
+                if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
+                    throw new Exception\MissingPropertyException('Missing property for parameter ' . $position . ' of method ' . $class . '::' . $method);
                 }
 
-                // next consult class level preferred instances
-                if ($type && $this->instanceManager->hasTypePreferences($type)) {
-                    $pInstances = $this->instanceManager->getTypePreferences($type);
-                    foreach ($pInstances as $pInstance) {
-                        if (is_object($pInstance)) {
-                            $computedParams['value'][$fqParamPos] = $pInstance;
-                            continue 2;
-                        }
-                        $pInstanceClass = ($this->instanceManager->hasAlias($pInstance)) ?
-                        $this->instanceManager->getClassFromAlias($pInstance) : $pInstance;
-                        if ($pInstanceClass === $type || is_subclass_of($pInstanceClass, $type)) {
-                            $computedParams['retrieval'][$fqParamPos] = [$pInstance, $pInstanceClass];
-                            continue 2;
-                        }
-                    }
-                }
-            }
-            if (!$isRequired) {
-                $computedParams['optional'][$fqParamPos] = true;
+                return null;
             }
 
-            if ($type && $isRequired && ($methodRequirementType & self::RESOLVE_EAGER)) {
-                $computedParams['retrieval'][$fqParamPos] = [$type, $type];
-            }
+            $params[] = $container->get($arg);
         }
 
-        $index = 0;
-        foreach ($injectionMethodParameters as $fqParamPos => $value) {
-            $name = $value[0];
-
-            if (isset($computedParams['value'][$fqParamPos])) {
-                // if there is a value supplied, use it
-                $resolvedParams[$index] = $computedParams['value'][$fqParamPos];
-            } elseif (isset($computedParams['retrieval'][$fqParamPos])) {
-                // detect circular dependencies! (they can only happen in instantiators)
-                if ($isInstantiator && in_array($computedParams['retrieval'][$fqParamPos][1], $this->currentDependencies)
-                    && (!isset($alias) || in_array($computedParams['retrieval'][$fqParamPos][0], $this->currentAliasDependenencies))
-                    ) {
-                        $msg = "Circular dependency detected: $class depends on {$value[1]} and viceversa";
-                        if (isset($alias)) {
-                            $msg .= " (Aliased as $alias)";
-                        }
-                        throw new Exception\CircularDependencyException($msg);
-                    }
-
-                    array_push($this->currentDependencies, $class);
-                    if (isset($alias)) {
-                        array_push($this->currentAliasDependenencies, $alias);
-                    }
-
-                    $dConfig = $this->instanceManager->getConfig($computedParams['retrieval'][$fqParamPos][0]);
-
-                    try {
-                        if ($dConfig['shared'] === false) {
-                            $resolvedParams[$index] = $this->newInstance($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams, false);
-                        } else {
-                            $resolvedParams[$index] = $this->get($computedParams['retrieval'][$fqParamPos][0], $callTimeUserParams);
-                        }
-                    } catch (DiRuntimeException $e) {
-                        if ($methodRequirementType & self::RESOLVE_STRICT) {
-                            //finally ( be aware to do at the end of flow)
-                            array_pop($this->currentDependencies);
-                            if (isset($alias)) {
-                                array_pop($this->currentAliasDependenencies);
-                            }
-                            // if this item was marked strict,
-                            // plus it cannot be resolve, and no value exist, bail out
-                            throw new Exception\MissingPropertyException(
-                                sprintf(
-                                    'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
-                                    (($value[0] === null) ? 'value' : 'instance/object')
-                                    ),
-                                $e->getCode(),
-                                $e
-                                );
-                        } else {
-                            //finally ( be aware to do at the end of flow)
-                            array_pop($this->currentDependencies);
-                            if (isset($alias)) {
-                                array_pop($this->currentAliasDependenencies);
-                            }
-                            return false;
-                        }
-                    } catch (ServiceManagerException $e) {
-                        // Zend\ServiceManager\Exception\ServiceNotCreatedException
-                        if ($methodRequirementType & self::RESOLVE_STRICT) {
-                            //finally ( be aware to do at the end of flow)
-                            array_pop($this->currentDependencies);
-                            if (isset($alias)) {
-                                array_pop($this->currentAliasDependenencies);
-                            }
-                            // if this item was marked strict,
-                            // plus it cannot be resolve, and no value exist, bail out
-                            throw new Exception\MissingPropertyException(
-                                sprintf(
-                                    'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
-                                    (($value[0] === null) ? 'value' : 'instance/object')
-                                    ),
-                                $e->getCode(),
-                                $e
-                                );
-                        } else {
-                            //finally ( be aware to do at the end of flow)
-                            array_pop($this->currentDependencies);
-                            if (isset($alias)) {
-                                array_pop($this->currentAliasDependenencies);
-                            }
-                            return false;
-                        }
-                    }
-                    array_pop($this->currentDependencies);
-                    if (isset($alias)) {
-                        array_pop($this->currentAliasDependenencies);
-                    }
-            } elseif (!array_key_exists($fqParamPos, $computedParams['optional'])) {
-                if ($methodRequirementType & self::RESOLVE_STRICT) {
-                    // if this item was not marked as optional,
-                    // plus it cannot be resolve, and no value exist, bail out
-                    throw new Exception\MissingPropertyException(sprintf(
-                        'Missing %s for parameter ' . $name . ' for ' . $class . '::' . $method,
-                        (($value[0] === null) ? 'value' : 'instance/object')
-                        ));
-                } else {
-                    return false;
-                }
-            } else {
-                $resolvedParams[$index] = $value[3];
-            }
-
-            $index++;
-        }
-
-        return $resolvedParams; // return ordered list of parameters
+        return $params;
     }
 }

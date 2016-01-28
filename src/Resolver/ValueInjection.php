@@ -10,6 +10,7 @@
 namespace Zend\Di\Resolver;
 
 use Zend\Di\Exception;
+use Zend\Di\Exception\RuntimeException;
 
 
 /**
@@ -48,6 +49,10 @@ class ValueInjection
      */
     public function export()
     {
+        if (!$this->isExportable()) {
+            throw new RuntimeException('Unable to export value');
+        }
+
         return var_export($this->value, true);
     }
 

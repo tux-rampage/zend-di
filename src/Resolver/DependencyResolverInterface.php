@@ -9,7 +9,7 @@
 
 namespace Zend\Di\Resolver;
 
-use Zend\Di\ServiceLocatorInterface;
+use Interop\Container\ContainerInterface;
 
 /**
  * Interface for implementing dependency resolvers
@@ -22,28 +22,29 @@ interface DependencyResolverInterface
     /**
      * Set the service locator to utilize
      *
-     * @param  ServiceLocatorInterface $serviceLocator  Service locator instance
+     * @param  ContainerInterface $serviceLocator  Service locator instance
      * @return self Should provide a fluent interface
      */
-    public function setServiceLocator(ServiceLocatorInterface $serviceLocator);
+    public function setServiceLocator(ContainerInterface $serviceLocator);
 
     /**
      * Resolve a type prefernece
      *
-     * @param string  $type           The type/class name to resolve the preference for
-     * @param string  $requestedType  The typename requested by DependencyInjectionInterface::newInstance()
+     * @param string  $dependencyType  The type/class name of the dependency to resolve the preference for
+     * @param string  $requestedType   The typename of the instance that is created or in which the dependency should be injected
      * @return string Returns the preferred type name
      */
-    public function resolvePreference($type, $requestedType = null);
+    public function resolvePreference($dependencyType, $requestedType = null);
 
     /**
      * Resolves all parameters for a method
      *
      * @param string $requestedType The requested type
      * @param string $method        The method name
+     * @param array  $parameters    Directly provided parameters for instanciation. Should only apply to instanciators
      * @return array|null           Returns the injection parameters as positional array
      *                              This array contains either the class/alias names as string
      *                              or ValueInjection instances
      */
-    public function resolveMethodParameters($requestedType, $method, $require = false);
+    public function resolveMethodParameters($requestedType, $method, array $parameters = []);
 }

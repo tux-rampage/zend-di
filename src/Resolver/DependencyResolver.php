@@ -9,10 +9,11 @@
 
 namespace Zend\Di\Resolver;
 
+use Interop\Container\ContainerInterface;
+
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\ConfigInterface;
-use Zend\Di\ServiceLocatorInterface;
-use Interop\Container\ContainerInterface;
+
 
 /**
  * The default resolver implementation
@@ -197,13 +198,13 @@ class DependencyResolver implements DependencyResolverInterface
             // There is a directly provided injection - This should only apply to instanciators
             // No attempt is made to resolve anything it's taken as it is
             if (isset($params[$name])) {
-                $result[] = new ValueInjection($params[$name]);
+                $result[$name] = new ValueInjection($params[$name]);
                 continue;
             }
 
             // There is a configured injection and it should not use the type preferences
             if (isset($injections[$name]) && ($injections[$name] != '*') && (null !== ($injection = $this->checkValueToInject($injections[$name], $type)))) {
-                $result[] = $injection;
+                $result[$name] = $injection;
                 continue;
             }
 
@@ -212,7 +213,7 @@ class DependencyResolver implements DependencyResolverInterface
                 $preference = $this->resolvePreference($type, $requestedType);
 
                 if ($preference) {
-                    $result[] = $preference;
+                    $result[$name] = $preference;
                     continue;
                 }
             }
@@ -223,7 +224,7 @@ class DependencyResolver implements DependencyResolverInterface
             }
 
             // Use the defintion provided default
-            $result[] = new ValueInjection($default);
+            $result[$name] = new ValueInjection($default);
         }
 
         return $result;

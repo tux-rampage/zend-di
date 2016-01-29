@@ -9,17 +9,16 @@
 
 namespace Zend\Di;
 
-use Closure;
-use Zend\Di\Exception\RuntimeException as DiRuntimeException;
-use Zend\ServiceManager\Exception\ExceptionInterface as ServiceManagerException;
+use Interop\Container\ContainerInterface;
+
 use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
-use Interop\Container\ContainerInterface;
+
 
 /**
  * Dependency injector that can generate instances using class definitions and configured instance parameters
  */
-class Di implements DependencyInjectionInterface
+class DependencyInjector implements DependencyInjectionInterface
 {
     /**
      * @var DefinitionList
@@ -54,25 +53,11 @@ class Di implements DependencyInjectionInterface
     protected $instanceContext = [];
 
     /**
-     * All the class dependencies [source][dependency]
+     * Secondary method injections that are allowed to omit
      *
-     * @var array
+     * @var \SplQueue
      */
-    protected $currentDependencies = [];
-
-    /**
-     * All the dependenent aliases
-     *
-     * @var array
-     */
-    protected $currentAliasDependenencies = [];
-
-    /**
-     * All the class references [dependency][source]
-     *
-     * @var array
-     */
-    protected $references = [];
+    protected $delayedInjections;
 
     /**
      * Resolve method policy
@@ -115,8 +100,10 @@ class Di implements DependencyInjectionInterface
         $this->definitions = $definitions? : new DefinitionList(new Definition\RuntimeDefinition());
         $this->config = $config? : new Config();
         $this->resolver = $resolver? : new DependencyResolver($this->definitions, $this->config);
-
+        $this->delayedInjections = new \SplQueue();
         $this->setServiceLocator($serviceLocator? : new ServiceLocator($this));
+
+        $this->delayedInjections->setIteratorMode(\SplDoublyLinkedList::IT_MODE_DELETE);
     }
 
     /**
@@ -157,6 +144,24 @@ class Di implements DependencyInjectionInterface
     }
 
     /**
+     * Check if the given type name can be instanciated
+     *
+     * @param  string $name
+     * @return bool
+     * @see    \Zend\Di\DependencyInjectionInterface::canInstanciate()
+     */
+    public function canInstanciate($name)
+    {
+        $class = $name;
+
+        if ($this->config->isAlias($name)) {
+            $class = $this->config->getClassForAlias($name);
+        }
+
+        return class_exists($class);
+    }
+
+    /**
      * Retrieve a new instance of a class
      *
      * Forces retrieval of a discrete instance of the given class, using the optionally provided
@@ -190,16 +195,10 @@ class Di implements DependencyInjectionInterface
         }
 
         $instantiator     = $definitions->getInstantiator($class);
-        $injectionMethods = [];
-        $injectionMethods[$class] = $definitions->getMethods($class);
-
-        foreach ($definitions->getClassSupertypes($class) as $supertype) {
-            $injectionMethods[$supertype] = $definitions->getMethods($supertype);
-        }
 
         try {
             $instance = $this->createInstance($name, $instantiator, $parameters, $class);
-        } catch (\Exception $e) {
+        } catch (Exception\ExceptionInterface $e) {
             $this->instanceContext = [];
             $this->currentInstances = [];
             throw $e;
@@ -237,10 +236,25 @@ class Di implements DependencyInjectionInterface
     }
 
     /**
-     * @param unknown $instance
-     * @param unknown $class
-     * @param unknown $type
-     * @param unknown $allowDelay
+     * Inject dependencies that could not be resolved during the new instance process
+     */
+    protected function injectDelayedDependencies()
+    {
+        foreach ($this->delayedInjections as $args) {
+            list($instance, $method, $instanceClass, $instanceType) = $args;
+            $this->resolveAndCallInjectionMethodForInstance($instance, $method, $instanceClass, $instanceType);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Perform injections into the given instance
+     *
+     * @param  object $instance     The instance to inject the dependencies to
+     * @param  string $class        The class name of this instance
+     * @param  string $type         The typename to use for resolving the dependencies
+     * @param  bool   $allowDelay   Flag if the injections for methods that fail to resolve are allowed to be delayed (within nested newInstance calls)
      * @return self
      */
     protected function doInjectDependencies($instance, $class, $type, $allowDelay = false)
@@ -260,7 +274,10 @@ class Di implements DependencyInjectionInterface
                 continue;
             }
 
-            $this->handleInjectDependency($instance, $method, $class, $type, $allowDelay);
+            if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
+                $this->delayedInjections->push([$instance, $method, $class, $type]);
+            }
+
             $visitedMethods[] = $method;
         }
 
@@ -270,111 +287,38 @@ class Di implements DependencyInjectionInterface
                     continue;
                 }
 
-                $this->handleInjectDependency($instance, $method, $class, $type, $allowDelay);
+                if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
+                    $this->delayedInjections->push([$instance, $method, $class, $type]);
+                }
+
                 $visitedMethods[] = $method;
             }
         }
     }
 
     /**
-     * @todo Refactor
-     * @param object      $instance
-     * @param array       $injectionMethods
-     * @param array       $params
-     * @param string|null $instanceClass
-     * @param string|null$instanceAlias
-     * @param  string                     $requestedName
+     * Resolves dependencies for the the method by using the instance type and injects them into the provided instance
+     *
+     * @param  object                       $instance
+     * @param  array                        $method
+     * @param  string|null                  $instanceClass
+     * @param  string|null                  $instanceType
      * @throws Exception\RuntimeException
      */
-    protected function handleInjectDependency($instance, $method, $instanceClass, $instanceType, $allowDelay = false)
+    protected function resolveAndCallInjectionMethodForInstance($instance, $method, $instanceClass, $instanceType)
     {
-        // localize dependencies
-        $definitions = $this->definitions;
-        $container   = $this->serviceLocator;
+        $params = $this->resolveMethodParameters($instanceType, $method, [], self::METHOD_IS_OPTIONAL);
 
-        try {
-            $params = $this->resolveMethodParameters($instanceType, $method);
+        if ($params == null) {
+            return false;
+        }
 
-            if ($params == null) {
-                return;
-            }
-
+        // Do not call a method without parameters
+        if (count($params)) {
             call_user_func_array([$instance, $method], $params);
-        } catch (Exception\ExceptionInterface $e) {
-            // TODO: Delay?
         }
 
-
-        //FIXME: GO ON!
-        $calledMethods = ['__construct' => true];
-
-        if ($injectionMethods) {
-            foreach ($injectionMethods as $type => $typeInjectionMethods) {
-                foreach ($typeInjectionMethods as $typeInjectionMethod => $methodRequirementType) {
-                    if (!isset($calledMethods[$typeInjectionMethod])) {
-                        if ($this->resolveAndCallInjectionMethodForInstance($instance, $typeInjectionMethod, $params, $instanceAlias, $methodRequirementType, $type)) {
-                            $calledMethods[$typeInjectionMethod] = true;
-                        }
-                    }
-                }
-            }
-
-            if ($requestedName) {
-                $instanceConfig = $instanceManager->getConfig($requestedName);
-
-                if ($instanceConfig['injections']) {
-                    $objectsToInject = $methodsToCall = [];
-                    foreach ($instanceConfig['injections'] as $injectName => $injectValue) {
-                        if (is_int($injectName) && is_string($injectValue)) {
-                            $objectsToInject[] = $this->get($injectValue, $params);
-                        } elseif (is_string($injectName) && is_array($injectValue)) {
-                            if (is_string(key($injectValue))) {
-                                $methodsToCall[] = ['method' => $injectName, 'args' => $injectValue];
-                            } else {
-                                foreach ($injectValue as $methodCallArgs) {
-                                    $methodsToCall[] = ['method' => $injectName, 'args' => $methodCallArgs];
-                                }
-                            }
-                        } elseif (is_object($injectValue)) {
-                            $objectsToInject[] = $injectValue;
-                        } elseif (is_int($injectName) && is_array($injectValue)) {
-                            throw new Exception\RuntimeException(
-                                'An injection was provided with a keyed index and an array of data, try using'
-                                . ' the name of a particular method as a key for your injection data.'
-                                );
-                        }
-                    }
-                    if ($objectsToInject) {
-                        foreach ($objectsToInject as $objectToInject) {
-                            $calledMethods = ['__construct' => true];
-                            foreach ($injectionMethods as $type => $typeInjectionMethods) {
-                                foreach ($typeInjectionMethods as $typeInjectionMethod => $methodRequirementType) {
-                                    if (!isset($calledMethods[$typeInjectionMethod])) {
-                                        $methodParams = $definitions->getMethodParameters($type, $typeInjectionMethod);
-                                        if ($methodParams) {
-                                            foreach ($methodParams as $methodParam) {
-                                                $objectToInjectClass = $this->getClass($objectToInject);
-                                                if ($objectToInjectClass == $methodParam[1] || is_subclass_of($objectToInjectClass, $methodParam[1])) {
-                                                    if ($this->resolveAndCallInjectionMethodForInstance($instance, $typeInjectionMethod, [$methodParam[0] => $objectToInject], $instanceAlias, self::METHOD_IS_REQUIRED, $type)) {
-                                                        $calledMethods[$typeInjectionMethod] = true;
-                                                    }
-                                                    continue 3;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if ($methodsToCall) {
-                        foreach ($methodsToCall as $methodInfo) {
-                            $this->resolveAndCallInjectionMethodForInstance($instance, $methodInfo['method'], $methodInfo['args'], $instanceAlias, self::METHOD_IS_REQUIRED, $instanceClass);
-                        }
-                    }
-                }
-            }
-        }
+        return true;
     }
 
     /**
@@ -428,34 +372,6 @@ class Di implements DependencyInjectionInterface
     }
 
     /**
-     * This parameter will handle any injection methods and resolution of
-     * dependencies for such methods
-     *
-     * @param  object      $instance
-     * @param  string      $method
-     * @param  array       $params
-     * @param  string      $alias
-     * @param  bool        $methodRequirementType
-     * @param  string|null $methodClass
-     * @return bool
-     */
-    protected function resolveAndCallInjectionMethodForInstance($instance, $method, $params, $alias, $methodRequirementType, $methodClass = null)
-    {
-        $methodClass = ($methodClass) ?: $this->getClass($instance);
-        $callParameters = $this->resolveMethodParameters($methodClass, $method, $params, $alias, $methodRequirementType);
-        if ($callParameters == false) {
-            return false;
-        }
-        if ($callParameters !== array_fill(0, count($callParameters), null)) {
-            call_user_func_array([$instance, $method], $callParameters);
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
      * Resolve parameters referencing other services
      *
      * @param  string                                $class
@@ -471,6 +387,14 @@ class Di implements DependencyInjectionInterface
         $container = $this->serviceLocator;
         $resolved = $this->resolver->resolveMethodParameters($class, $method, $params);
         $params = [];
+
+        if ($resolved === null) {
+            if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
+                throw new Exception\MissingPropertyException('Could not resolve required parameters for ' . $class . '::' . $method);
+            }
+
+            return null;
+        }
 
         foreach ($resolved as $position => $arg) {
             if ($arg instanceof Resolver\ValueInjection) {

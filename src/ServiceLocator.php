@@ -84,11 +84,9 @@ class ServiceLocator implements ContainerInterface
             return $this->services[$name];
         }
 
-        $service = $this->di->newInstance($name, false);
+        $service = $this->di->newInstance($name);
 
         $this->setInstance($name, $service);
-        $this->di->injectDependencies($service, $name);
-
         return $service;
     }
 }

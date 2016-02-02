@@ -355,6 +355,10 @@ class DependencyInjector implements DependencyInjectionInterface
             $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, self::METHOD_IS_INSTANTIATOR);
         }
 
+        if ($instanciator !== '__construct') {
+            return call_user_func_array([$class, $instanciator], $callParameters);
+        }
+
         // Hack to avoid Reflection in most common use cases
         switch (count($callParameters)) {
             case 0:

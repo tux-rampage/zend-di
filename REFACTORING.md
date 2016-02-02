@@ -10,7 +10,7 @@ the Di component with possible BC breaks (much like the proposed ServiceManager 
   * The ZF2 code has duplications (namingly the compiler and runtime definition)
   * The resolver code is uneccessary complex and should be put into a separate implementation
   * The InstanceManager should bereplaced by the service locator interface
-  * The service locator should be exchangible
+  * The service locator should be exchangible (by any Interop\ContainerInterface)
 
 ### Add support for generating an optimized di container
 
@@ -23,6 +23,13 @@ injector for the particular type and fall back to the default routines.
 
 The current ones are most likely never used in the real world or by Di.
 This should be integrated better and be used for looking up instances.
+
+### Make it a ZF3 Module
+
+This component should easily integrate by adding it as a ZF-Module to the application config. This approach
+will make it possible to remove dependencies from Mvc or other components.
+
+So people can decide whether they stay with ServiceManager only or combine it with Zend\Di.
 
 ### Better integration with ServiceManager
 
@@ -43,19 +50,18 @@ While the DB Adapter for Foo is taken from the ServiceManager, the auth service
 dependency for Bar is attempted to be created purely via Di. All reference to the
 ServiceManager is lost.
 
-By making the InstanceManager exchangable and change its role to a ServiceLocator it could be
-replaced with a Zend\ServiceManager\ServiceLocator aware implementation where the
-instatiation handling is delegated to the service manager (Which might fire back
-to the DependencyInjector for undefined services).
+Since the ServiceManager in ZF3 now uses Interop\ContainerInterface, we can pass the ServiceManager
+for retrieving the instances the dependency injector needs.
 
-### Remove parameters array
+When Using the Module approach above, Di can register an abstract service factory to handle class instanciation.
 
-While the concept of providing parameters to a service locator (or its factories) is
-fine for the ServiceManager, it's questionable for dependency injection.
+### Change the parameters array role
+
+While the concept of providing complex parameters to a service locator (or its factories) is
+fine for the ServiceManager, but it's questionable for dependency injection.
 
 Mapping a parameter hash is not only a pain to resolve (especially for nested dependencies),
 they also make things uneccessarily complicated.
 
-The better approach are instance configs and aliases. If the params flexibility
-is required, a service factory and the ServiceManager would be the better fit
-then trying to guess what the consumer actually intended to inject at runtime.
+To remove this complexity and allow faster instanciation the provided parameters array will only be used for
+the instanciation method of the requested class. It will not be passed to any other methods and/or newly instanciated dependencies.

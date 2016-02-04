@@ -11,35 +11,28 @@ namespace Zend\Di\Definition;
 
 use Zend\Code\Annotation\AnnotationCollection;
 use Zend\Code\Reflection;
-use Zend\Di\Di;
 
 /**
  * Class definitions based on runtime reflection
  */
-class RuntimeDefinition implements DefinitionInterface
+class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
 {
     /**
-     * @var array
-     */
-    protected $classes = [];
-
-    /**
+     * Flag if classes should be looked up explicitly
+     *
      * @var bool
      */
     protected $explicitLookups = false;
 
     /**
-     * @var IntrospectionStrategy
+     * @var Introspection\StrategyInterface
      */
     protected $introspectionStrategy = null;
 
     /**
-     * @var array
-     */
-    protected $injectionMethods = [];
-
-    /**
-     * @var array
+     * Tracks which classes are processed
+     *
+     * @var bool[string]
      */
     protected $processedClass = [];
 
@@ -49,25 +42,41 @@ class RuntimeDefinition implements DefinitionInterface
      * @param null|IntrospectionStrategy $introspectionStrategy
      * @param array|null                 $explicitClasses
      */
-    public function __construct(IntrospectionStrategy $introspectionStrategy = null, array $explicitClasses = null)
+    public function __construct(Introspection\StrategyInterface $introspectionStrategy = null, array $explicitClasses = null)
     {
-        $this->introspectionStrategy = ($introspectionStrategy) ?: new IntrospectionStrategy();
+        $this->introspectionStrategy = ($introspectionStrategy) ?: $this->createDefaultIntrospectionStrategy();
+
         if ($explicitClasses) {
             $this->setExplicitClasses($explicitClasses);
         }
     }
 
     /**
-     * @param  IntrospectionStrategy $introspectionStrategy
-     * @return void
+     * @return Introspection\StrategyInterface
      */
-    public function setIntrospectionStrategy(IntrospectionStrategy $introspectionStrategy)
+    protected function createDefaultIntrospectionStrategy()
     {
-        $this->introspectionStrategy = $introspectionStrategy;
+        if (version_compare(PHP_VERSION, '7', '<')) {
+            return new Introspection\Php5Strategy();
+        }
+
+        return new Introspection\DefaultStrategy();
     }
 
     /**
-     * @return IntrospectionStrategy
+     * Set the introspection strategy for reflecting classes
+     *
+     * @param  Introspection\StrategyInterface $introspectionStrategy
+     * @return self
+     */
+    public function setIntrospectionStrategy(Introspection\StrategyInterface $introspectionStrategy)
+    {
+        $this->introspectionStrategy = $introspectionStrategy;
+        return $this;
+    }
+
+    /**
+     * @return Introspection\StrategyInterface
      */
     public function getIntrospectionStrategy()
     {
@@ -75,17 +84,26 @@ class RuntimeDefinition implements DefinitionInterface
     }
 
     /**
-     * Set explicit classes
+     * Set explicit class names
      *
-     * @param array $explicitClasses
+     * Adding classes this way will cause the defintion to report them when getClasses() is called.
+     *
+     * NOTE: Starting with version 3.0 this will not prevent this definitin to create definitions
+     * for unknown classes dynamically
+     *
+     * @todo    Should this be checking provided class names for existence?
+     * @param   string[] $explicitClasses    An array of class names
+     * @return  self
      */
     public function setExplicitClasses(array $explicitClasses)
     {
         $this->explicitLookups = true;
+
         foreach ($explicitClasses as $eClass) {
-            $this->classes[$eClass] = true;
+            $this->definition[$eClass] = true;
         }
-        $this->classes = $explicitClasses;
+
+        return $this;
     }
 
     /**
@@ -101,7 +119,7 @@ class RuntimeDefinition implements DefinitionInterface
      */
     public function getClasses()
     {
-        return array_keys($this->classes);
+        return array_keys($this->definition);
     }
 
     /**
@@ -109,8 +127,8 @@ class RuntimeDefinition implements DefinitionInterface
      */
     public function hasClass($class)
     {
-        if ($this->explicitLookups === true) {
-            return (array_key_exists($class, $this->classes));
+        if ($this->explicitLookups && array_key_exists($class, $this->definition)) {
+            return true;
         }
 
         return class_exists($class) || interface_exists($class);
@@ -122,7 +140,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function getClassSupertypes($class)
     {
         $this->processClass($class);
-        return $this->classes[$class]['supertypes'];
+        parent::getClassSupertypes($class);
     }
 
     /**
@@ -131,7 +149,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function getInstantiator($class)
     {
         $this->processClass($class);
-        return $this->classes[$class]['instantiator'];
+        return parent::getInstantiator($class);
     }
 
     /**
@@ -140,7 +158,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function hasMethods($class)
     {
         $this->processClass($class);
-        return (count($this->classes[$class]['methods']) > 0);
+        return parent::hasMethods($class);
     }
 
     /**
@@ -149,7 +167,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function hasMethod($class, $method)
     {
         $this->processClass($class);
-        return isset($this->classes[$class]['methods'][$method]);
+        return parent::hasMethod($class, $method);
     }
 
     /**
@@ -158,7 +176,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function getMethods($class)
     {
         $this->processClass($class);
-        return $this->classes[$class]['methods'];
+        return parent::getMethods($class);
     }
 
     /**
@@ -167,7 +185,7 @@ class RuntimeDefinition implements DefinitionInterface
     public function hasMethodParameters($class, $method)
     {
         $this->processClass($class);
-        return (array_key_exists($method, $this->classes[$class]['parameters']));
+        return parent::hasMethodParameters($class, $method);
     }
 
     /**
@@ -176,17 +194,20 @@ class RuntimeDefinition implements DefinitionInterface
     public function getMethodParameters($class, $method)
     {
         $this->processClass($class);
-        return $this->classes[$class]['parameters'][$method];
+        return parent::getMethodParameters($class, $method);
     }
 
     /**
-     * @param string $class
-     * @param bool $forceLoad
+     * Create the definition for the given class
+     *
+     * @param   string  $class      The class name to process
+     * @param   bool    $forceLoad  Flag if the defintion should force reloading the class, even if the definition already exists
+     * @return  self
      */
     protected function processClass($class, $forceLoad = false)
     {
         if (!isset($this->processedClass[$class]) || $this->processedClass[$class] === false) {
-            $this->processedClass[$class] = (array_key_exists($class, $this->classes) && is_array($this->classes[$class]));
+            $this->processedClass[$class] = (array_key_exists($class, $this->definition) && is_array($this->definition[$class]));
         }
 
         if (!$forceLoad && $this->processedClass[$class]) {
@@ -198,142 +219,133 @@ class RuntimeDefinition implements DefinitionInterface
         /** @var $rClass \Zend\Code\Reflection\ClassReflection */
         $rClass = new Reflection\ClassReflection($class);
         $className = $rClass->getName();
-        $matches = null; // used for regex below
 
         // setup the key in classes
-        $this->classes[$className] = [
+        $this->processedClass[$className] = true;
+        $this->definition[$className] = [
             'supertypes'   => [],
             'instantiator' => null,
             'methods'      => [],
             'parameters'   => []
         ];
 
-        $def = &$this->classes[$className]; // localize for brevity
-
-        // class annotations?
-        if ($strategy->getUseAnnotations() == true) {
-            $annotations = $rClass->getAnnotations($strategy->getAnnotationManager());
-
-            if (($annotations instanceof AnnotationCollection)
-                && $annotations->hasAnnotation('Zend\Di\Definition\Annotation\Instantiator')) {
-                // @todo Instantiator support in annotations
-            }
-        }
-
+        $def = &$this->definition[$className]; // localize for brevity
         $rTarget = $rClass;
-        $supertypes = [];
-        do {
-            $supertypes = array_merge($supertypes, $rTarget->getInterfaceNames());
-            if (!($rTargetParent = $rTarget->getParentClass())) {
-                break;
-            }
-            $supertypes[] = $rTargetParent->getName();
-            $rTarget = $rTargetParent;
-        } while (true);
+        $supertypes = $rTarget->getInterfaceNames();
 
+        // Build up supertype list
+        while ($rTargetParent = $rTarget->getParentClass()) {
+            $supertypes[] = $rTargetParent->getName();
+            $supertypes = array_merge($supertypes, $rTargetParent->getInterfaceNames());
+            $rTarget = $rTargetParent;
+        };
+
+        // TODO: Should we automatically create definitions for the super classes?
         $def['supertypes'] = array_keys(array_flip($supertypes));
 
-        if ($def['instantiator'] === null) {
-            if ($rClass->isInstantiable()) {
-                $def['instantiator'] = '__construct';
-            }
+        // If the class is instanciable default to instanciation via constructor
+        if ($rClass->isInstantiable()) {
+            $def['instantiator'] = '__construct';
         }
 
+        // Check for constructor
         if ($rClass->hasMethod('__construct')) {
-            $def['methods']['__construct'] = Di::METHOD_IS_CONSTRUCTOR; // required
+            $def['methods']['__construct'] = self::METHOD_IS_CONSTRUCTOR; // required
             $this->processParams($def, $rClass, $rClass->getMethod('__construct'));
         }
+
+        $useAnnotations = $strategy->getUseAnnotations(); // localize for performannce
 
         foreach ($rClass->getMethods(Reflection\MethodReflection::IS_PUBLIC) as $rMethod) {
             $methodName = $rMethod->getName();
 
-            if ($rMethod->getName() === '__construct' || $rMethod->isStatic()) {
+            if ($rMethod->getName() === '__construct' || (!$useAnnotations && $rMethod->isStatic())) {
                 continue;
             }
 
-            if ($strategy->getUseAnnotations() == true) {
-                $annotations = $rMethod->getAnnotations($strategy->getAnnotationManager());
+            $annotations = $useAnnotations? $rMethod->getAnnotations($strategy->getAnnotationManager()) : null;
 
-                if (($annotations instanceof AnnotationCollection)
-                    && $annotations->hasAnnotation('Zend\Di\Definition\Annotation\Inject')) {
-                    // use '@inject' and search for parameters
-                    $def['methods'][$methodName] = Di::METHOD_IS_EAGER;
-                    $this->processParams($def, $rClass, $rMethod);
+            // This condition only applies if annotations are used. This allows static methods to be defined as instanciators
+            if ($rMethod->isStatic()) {
+                if (!($annotations instanceof AnnotationCollection) || !$annotations->hasAnnotation(Annotation\Instantiator::class)) {
                     continue;
                 }
+
+                $def['instantiator'] = $rMethod->getName();
+                $def['methods'][$rMethod->getName()] = self::METHOD_IS_CONSTRUCTOR;
+                $this->processParams($def, $rClass, $rMethod);
+
+                continue;
             }
 
-            $methodPatterns = $this->introspectionStrategy->getMethodNameInclusionPatterns();
-
-            // matches a method injection pattern?
-            foreach ($methodPatterns as $methodInjectorPattern) {
-                preg_match($methodInjectorPattern, $methodName, $matches);
-                if ($matches) {
-                    $def['methods'][$methodName] = Di::METHOD_IS_OPTIONAL; // check ot see if this is required?
-                    $this->processParams($def, $rClass, $rMethod);
-                    continue 2;
-                }
+            // Adding injection methods without parameters is quite useless (means nothing to inject)
+            if (!count($rMethod->getParameters())) {
+                continue;
             }
 
-            // method
-            // by annotation
-            // by setter pattern,
-            // by interface
+            if (($annotations instanceof AnnotationCollection) && $annotations->hasAnnotation(Annotation\Inject::class)) {
+                // use '@Inject' and search for parameters
+                $def['methods'][$methodName] = self::METHOD_IS_EAGER;
+                $this->processParams($def, $rClass, $rMethod);
+                continue;
+            }
+
+            if ($strategy->includeMethod($rMethod)) {
+                $def['methods'][$methodName] = self::METHOD_IS_OPTIONAL;
+                $this->processParams($def, $rClass, $rMethod);
+                continue;
+            }
         }
 
-        $interfaceInjectorPatterns = $this->introspectionStrategy->getInterfaceInjectionInclusionPatterns();
-
-        // matches the interface injection pattern
-        /** @var $rIface \ReflectionClass */
+        // Check interface inclusion
+        /* @var $rIface \ReflectionClass */
         foreach ($rClass->getInterfaces() as $rIface) {
-            foreach ($interfaceInjectorPatterns as $interfaceInjectorPattern) {
-                preg_match($interfaceInjectorPattern, $rIface->getName(), $matches);
-                if ($matches) {
-                    foreach ($rIface->getMethods() as $rMethod) {
-                        if (($rMethod->getName() === '__construct') || !count($rMethod->getParameters())) {
-                            // constructor not allowed in interfaces
-                            // Don't call interface methods without a parameter (Some aware interfaces define setters in ZF2)
-                            continue;
-                        }
-                        $def['methods'][$rMethod->getName()] = Di::METHOD_IS_AWARE;
-                        $this->processParams($def, $rClass, $rMethod);
-                    }
-                    continue 2;
+            // consult the strategy
+            if (!$strategy->includeInterfaceMethods($rIface)) {
+                continue;
+            }
+
+            foreach ($rIface->getMethods() as $rMethod) {
+                if (($rMethod->getName() == '__construct') || $rMethod->isStatic() || !count($rMethod->getParameters())) {
+                    continue;
                 }
+
+                $def['methods'][$rMethod->getName()] = self::METHOD_IS_AWARE;
+                $this->processParams($def, $rClass, $rMethod);
             }
         }
     }
 
     /**
+     * Process method parameters
+     *
      * @param array                                  $def
      * @param \Zend\Code\Reflection\ClassReflection  $rClass
      * @param \Zend\Code\Reflection\MethodReflection $rMethod
      */
     protected function processParams(&$def, Reflection\ClassReflection $rClass, Reflection\MethodReflection $rMethod)
     {
-        if (count($rMethod->getParameters()) === 0) {
+        if (!count($rMethod->getParameters())) {
             return;
         }
 
+        $strategy = $this->getIntrospectionStrategy();
         $methodName = $rMethod->getName();
-
-        // @todo annotations here for alternate names?
-
         $def['parameters'][$methodName] = [];
 
-        foreach ($rMethod->getParameters() as $p) {
+        foreach ($rMethod->getParameters() as $reflectedParameter) {
             /** @var $p \ReflectionParameter  */
-            $actualParamName = $p->getName();
+            $name = $reflectedParameter->getName();
+            $isOptional = ($reflectedParameter->isOptional() && $reflectedParameter->isDefaultValueAvailable());
 
-            $fqName = $rClass->getName() . '::' . $rMethod->getName() . ':' . $p->getPosition();
+            $parameterDefinition = new MethodParameter();
+            $parameterDefinition->name = $name;
+            $parameterDefinition->isRequired = !$isOptional;
+            $parameterDefinition->position = $reflectedParameter->getPosition();
+            $parameterDefinition->type = $strategy->reflectParameterType($reflectedParameter);
+            $parameterDefinition->default = $isOptional? $reflectedParameter->getDefaultValue() : null;
 
-            $def['parameters'][$methodName][$fqName] = [];
-
-            // set the class name, if it exists
-            $def['parameters'][$methodName][$fqName][] = $actualParamName;
-            $def['parameters'][$methodName][$fqName][] = ($p->getClass() !== null) ? $p->getClass()->getName() : null;
-            $def['parameters'][$methodName][$fqName][] = !($optional = $p->isOptional() && $p->isDefaultValueAvailable());
-            $def['parameters'][$methodName][$fqName][] = $optional ? $p->getDefaultValue() : null;
+            $def['parameters'][$methodName][$name] = $parameterDefinition;
         }
     }
 }

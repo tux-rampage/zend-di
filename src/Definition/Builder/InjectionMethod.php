@@ -10,6 +10,7 @@
 namespace Zend\Di\Definition\Builder;
 
 use Zend\Di\Di;
+use Zend\Di\Definition\MethodParameter;
 
 /**
  * Definitions for an injection endpoint method
@@ -33,7 +34,6 @@ class InjectionMethod
     public function setName($name)
     {
         $this->name = $name;
-
         return $this;
     }
 
@@ -47,20 +47,21 @@ class InjectionMethod
 
     /**
      * @param  string          $name
-     * @param  string|null     $class
+     * @param  string|null     $type
      * @param  mixed|null      $isRequired
      * @param  mixed|null      $default
      * @return InjectionMethod
      */
-    public function addParameter($name, $class = null, $isRequired = null, $default = null)
+    public function addParameter($name, $type = null, $isRequired = null, $default = null)
     {
-        $this->parameters[] = [
-            $name,
-            $class,
-            self::detectMethodRequirement($isRequired),
-            $default,
-        ];
+        $definition = new MethodParameter();
+        $definition->name = $name;
+        $definition->type = $type;
+        $definition->isRequired = $isRequired;
+        $definition->default = $default;
+        $definition->position = count($this->parameters);
 
+        $this->parameters[$name] = $name;
         return $this;
     }
 
@@ -73,43 +74,12 @@ class InjectionMethod
     }
 
     /**
-     *
+     * @deprecated
      * @param mixed $requirement
      * @return int
      */
     public static function detectMethodRequirement($requirement)
     {
-        if (is_bool($requirement)) {
-            return $requirement ? Di::METHOD_IS_REQUIRED : Di::METHOD_IS_OPTIONAL;
-        }
-
-        if (null === $requirement) {
-            //This is mismatch to ClassDefinition::addMethod is it ok ? is optional?
-            return Di::METHOD_IS_REQUIRED;
-        }
-
-        if (is_int($requirement)) {
-            return $requirement;
-        }
-
-        if (is_string($requirement)) {
-            switch (strtolower($requirement)) {
-                default:
-                case "require":
-                case "required":
-                    return Di::METHOD_IS_REQUIRED;
-                case "aware":
-                    return Di::METHOD_IS_AWARE;
-                case "optional":
-                    return Di::METHOD_IS_OPTIONAL;
-                case "constructor":
-                    return Di::METHOD_IS_CONSTRUCTOR;
-                case "instantiator":
-                    return Di::METHOD_IS_INSTANTIATOR;
-                case "eager":
-                    return Di::METHOD_IS_EAGER;
-            }
-        }
         return 0;
     }
 }

@@ -12,6 +12,31 @@ namespace Zend\Di\Definition;
 interface DefinitionInterface
 {
     /**
+     * use only specified parameters
+     */
+    const METHOD_IS_OPTIONAL = 0;
+
+    /**
+     * resolve mode RESOLVE_EAGER | RESOLVE_STRICT
+     */
+    const METHOD_IS_REQUIRED = 3;
+
+    /**
+     * This method is a constructor
+     */
+    const METHOD_IS_CONSTRUCTOR = self::METHOD_IS_REQUIRED;
+
+    /**
+     * Definitions comming from interfaces (Aware)
+     */
+    const METHOD_IS_AWARE = self::METHOD_IS_OPTIONAL;
+
+    /**
+     * resolve mode RESOLVE_EAGER
+     */
+    const METHOD_IS_EAGER = 1;
+
+    /**
      * Retrieves all classes in this definition
      *
      * @return string[]

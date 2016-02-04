@@ -9,6 +9,12 @@
 
 namespace Zend\Di\Definition\Introspection;
 
+use Zend\Code\Annotation\AnnotationManager;
+
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+
 /**
  * Interface definition for introspection strategies
  */
@@ -19,5 +25,35 @@ interface StrategyInterface
      *
      * @param \ReflectionParameter $parameter
      */
-    public function reflectParameterType(\ReflectionParameter $parameter);
+    public function reflectParameterType(ReflectionParameter $parameter);
+
+    /**
+     * Returns whether to use annotations or not
+     *
+     * @return bool
+     */
+    public function getUseAnnotations();
+
+    /**
+     * Returns the annotation manager to use for reflecting a method
+     *
+     * @return AnnotationManager
+     */
+    public function getAnnotationManager();
+
+    /**
+     * Checks the reflected method it is allowed for dependency injection
+     *
+     * @param   ReflectionMethod $reflectedMethod
+     * @return  bool
+     */
+    public function includeMethod(ReflectionMethod $reflectedMethod);
+
+    /**
+     * Checks whether the interface methods should be added tothe definition or not
+     *
+     * @param   ReflectionClass $reflectedInterface
+     * @return  bool
+     */
+    public function includeInterfaceMethods(ReflectionClass $reflectedInterface);
 }

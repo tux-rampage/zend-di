@@ -65,8 +65,8 @@ interface DefinitionInterface
      * The instanciator must be either a static method name of the class, or
      * "__construct"
      *
-     * @param  string $class
-     * @return string
+     * @param  string       $class  The class name to get the instanciator for
+     * @return string|null          The instanciator method or null if the defintion cannot provide one
      */
     public function getInstantiator($class);
 

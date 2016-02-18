@@ -77,16 +77,6 @@ class Compiler
     }
 
     /**
-     * Get introspection strategy
-     *
-     * @return IntrospectionStrategy
-     */
-    public function getIntrospectionStrategy()
-    {
-        return $this->introspectionStrategy;
-    }
-
-    /**
      * Add directory
      *
      * @param string $directory

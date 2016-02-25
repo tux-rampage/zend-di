@@ -13,6 +13,7 @@ use Interop\Container\ContainerInterface;
 
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\ConfigInterface;
+use Zend\Di\Exception\MissingPropertyException;
 
 
 /**
@@ -20,22 +21,6 @@ use Zend\Di\ConfigInterface;
  */
 class DependencyResolver implements DependencyResolverInterface
 {
-    /**
-     * Require as many things as possible
-     *
-     * Depends on the definition, this will cause the resolver to fail
-     * on dependencies that are marked as eager as well
-     */
-    const MODE_EAGER = 2;
-
-    /**
-     * Only essentially required methods
-     *
-     * This will cause the resolver to only fail on methods marked as
-     * Required.
-     */
-    const MODE_STRICT = 1;
-
     /**
      * @var ConfigInterface
      */
@@ -236,7 +221,6 @@ class DependencyResolver implements DependencyResolverInterface
         }
 
         $result = [];
-        $params = $this->definition->getMethodParameters($class, $method);
 
         // This method is not known - take the injections as literal
         if (!$this->definition->hasMethod($class, $method)) {
@@ -251,7 +235,8 @@ class DependencyResolver implements DependencyResolverInterface
             return $result;
         }
 
-        $methodRequirement = $this->definition->
+        $params = $this->definition->getMethodParameters($class, $method);
+        $methodRequirement = $this->definition->getMethodRequirementType($class, $method);
 
         foreach ($params as $paramInfo) {
             $name = $paramInfo->name;
@@ -288,6 +273,10 @@ class DependencyResolver implements DependencyResolverInterface
 
             // The parameter is required, but we can't find anything that ist suitable
             if ($isRequired) {
+                if (($methodRequirement & $this->mode) != 0) {
+                    throw new MissingPropertyException(sprintf('Could not resolve value for ', $class, $method, $name));
+                }
+
                 return null;
             }
 

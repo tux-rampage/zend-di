@@ -13,6 +13,7 @@ use Interop\Container\ContainerInterface;
 
 use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
+use Zend\View\Resolver\ResolverInterface;
 
 
 /**
@@ -265,6 +266,18 @@ class DependencyInjector implements DependencyInjectionInterface
                 $visitedMethods[] = $method;
             }
         }
+
+        foreach ($this->config->getAllInjectionMethods($type) as $method) {
+            if (in_array($method, $visitedMethods)) {
+                continue;
+            }
+
+            if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
+                $this->delayedInjections->push([$instance, $method, $class, $type]);
+            }
+
+            $visitedMethods[] = $method;
+        }
     }
 
     /**
@@ -323,7 +336,7 @@ class DependencyInjector implements DependencyInjectionInterface
         }
 
         if ($this->definitions->hasMethod($class, $instanciator)) {
-            $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, self::METHOD_IS_INSTANTIATOR);
+            $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, true);
         }
 
         if ($instanciator !== '__construct') {
@@ -349,22 +362,22 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Resolve parameters referencing other services
      *
-     * @param  string                                $type                  The class or alias name
-     * @param  string                                $method                The method name to resolve
-     * @param  array                                 $params                Provided call time parameters
-     * @param  int                                   $methodRequirementType Method requirement type
+     * @param  string                                $type      The class or alias name
+     * @param  string                                $method    The method name to resolve
+     * @param  array                                 $params    Provided call time parameters
+     * @param  bool                                  $required  Override resolver requirements
      * @throws Exception\MissingPropertyException
      * @throws Exception\CircularDependencyException
      * @return array|null
      */
-    protected function resolveMethodParameters($type, $method, array $params = [], $methodRequirementType = self::METHOD_IS_OPTIONAL)
+    protected function resolveMethodParameters($type, $method, array $params = [], $required = false)
     {
         $container = $this->serviceLocator;
         $resolved = $this->resolver->resolveMethodParameters($type, $method, $params);
         $params = [];
 
         if ($resolved === null) {
-            if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
+            if ($required) {
                 throw new Exception\MissingPropertyException('Could not resolve required parameters for ' . $type . '::' . $method);
             }
 
@@ -378,7 +391,7 @@ class DependencyInjector implements DependencyInjectionInterface
             }
 
             if (($arg === null) || !$container->has($arg)) {
-                if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
+                if ($required) {
                     throw new Exception\MissingPropertyException('Missing property for parameter ' . $position . ' of method ' . $type . '::' . $method);
                 }
 

@@ -20,6 +20,22 @@ use Interop\Container\ContainerInterface;
 interface DependencyResolverInterface
 {
     /**
+     * Require as many things as possible
+     *
+     * Depends on the definition, this will cause the resolver to fail
+     * on dependencies that are marked as eager as well
+     */
+    const MODE_EAGER = 2;
+
+    /**
+     * Only essentially required methods
+     *
+     * This will cause the resolver to only fail on methods marked as
+     * Required.
+     */
+    const MODE_STRICT = 1;
+
+    /**
      * Set the service locator to utilize
      *
      * @param  ContainerInterface $serviceLocator  Service locator instance
@@ -37,14 +53,14 @@ interface DependencyResolverInterface
     public function resolvePreference($dependencyType, $requestedType = null);
 
     /**
-     * Resolves all parameters for a method
+     * Resolves all parameter types for a method
      *
-     * @param string $requestedType The requested type
-     * @param string $method        The method name
-     * @param array  $parameters    Directly provided parameters for instanciation. Should only apply to instanciators
-     * @return array|null           Returns the injection parameters as positional array
-     *                              This array contains either the class/alias names as string
-     *                              or ValueInjection instances
+     * @param  string       $requestedType  The requested type
+     * @param  string       $method         The method name
+     * @param  array        $parameters     Directly provided parameters for instanciation. Should only apply to instanciators
+     * @return array|null                   Returns the injection parameters as positional array
+     *                                      This array contains either the class/alias names as string
+     *                                      or ValueInjection instances
      */
     public function resolveMethodParameters($requestedType, $method, array $parameters = []);
 }

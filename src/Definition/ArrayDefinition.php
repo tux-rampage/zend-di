@@ -96,10 +96,6 @@ class ArrayDefinition implements DefinitionInterface
      */
     public function hasMethod($class, $method)
     {
-        if (!isset($this->definition[$class])) {
-            return false;
-        }
-
         if (!isset($this->definition[$class]['methods'])) {
             return false;
         }
@@ -112,10 +108,6 @@ class ArrayDefinition implements DefinitionInterface
      */
     public function getMethods($class)
     {
-        if (!isset($this->definition[$class])) {
-            return [];
-        }
-
         if (!isset($this->definition[$class]['methods'])) {
             return [];
         }
@@ -133,17 +125,22 @@ class ArrayDefinition implements DefinitionInterface
 
     /**
      * {@inheritDoc}
+     * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
+     */
+    public function getMethodRequirementType($class, $method)
+    {
+        if (!$this->hasMethod($class, $method)) {
+            return self::METHOD_IS_OPTIONAL;
+        }
+
+        return $this->definition[$class]['methods'][$method];
+    }
+
+    /**
+     * {@inheritDoc}
      */
     public function getMethodParameters($class, $method)
     {
-        if (!isset($this->definition[$class])) {
-            return [];
-        }
-
-        if (!isset($this->definition[$class]['parameters'])) {
-            return [];
-        }
-
         if (!isset($this->definition[$class]['parameters'][$method])) {
             return [];
         }

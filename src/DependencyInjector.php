@@ -3,7 +3,7 @@
  * Zend Framework (http://framework.zend.com/)
  *
  * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2016 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
@@ -162,7 +162,7 @@ class DependencyInjector implements DependencyInjectionInterface
             $aliasMsg = ($name != $class) ? ' (specified by alias ' . $name . ')' : '';
             throw new Exception\ClassNotFoundException(
                 'Class ' . $class . $aliasMsg . ' could not be located in provided definitions.'
-                );
+            );
         }
 
         $instantiator     = $definitions->getInstantiator($class);
@@ -309,20 +309,20 @@ class DependencyInjector implements DependencyInjectionInterface
         $class = $class? : $name;
 
         if (!class_exists($class)) {
-            if (interface_exists($class)) {
-                throw new Exception\ClassNotFoundException(sprintf(
-                    'Cannot instantiate interface "%s"',
-                    $class
-                    ));
-            }
-
             throw new Exception\ClassNotFoundException(sprintf(
                 'Class "%s" does not exist; cannot instantiate',
                 $class
-                ));
+            ));
         }
 
-        if ($this->definitions->hasMethod($name, $instanciator)) {
+        if (interface_exists($class)) {
+            throw new Exception\ClassNotFoundException(sprintf(
+                'Cannot instantiate interface "%s"',
+                $class
+            ));
+        }
+
+        if ($this->definitions->hasMethod($class, $instanciator)) {
             $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, self::METHOD_IS_INSTANTIATOR);
         }
 
@@ -349,23 +349,23 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Resolve parameters referencing other services
      *
-     * @param  string                                $class
-     * @param  string                                $method
-     * @param  array                                 $params
-     * @param  int                                   $methodRequirementType
+     * @param  string                                $type                  The class or alias name
+     * @param  string                                $method                The method name to resolve
+     * @param  array                                 $params                Provided call time parameters
+     * @param  int                                   $methodRequirementType Method requirement type
      * @throws Exception\MissingPropertyException
      * @throws Exception\CircularDependencyException
      * @return array|null
      */
-    protected function resolveMethodParameters($class, $method, array $params = [], $methodRequirementType = self::METHOD_IS_OPTIONAL)
+    protected function resolveMethodParameters($type, $method, array $params = [], $methodRequirementType = self::METHOD_IS_OPTIONAL)
     {
         $container = $this->serviceLocator;
-        $resolved = $this->resolver->resolveMethodParameters($class, $method, $params);
+        $resolved = $this->resolver->resolveMethodParameters($type, $method, $params);
         $params = [];
 
         if ($resolved === null) {
             if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
-                throw new Exception\MissingPropertyException('Could not resolve required parameters for ' . $class . '::' . $method);
+                throw new Exception\MissingPropertyException('Could not resolve required parameters for ' . $type . '::' . $method);
             }
 
             return null;
@@ -379,7 +379,7 @@ class DependencyInjector implements DependencyInjectionInterface
 
             if (($arg === null) || !$container->has($arg)) {
                 if ($methodRequirementType & self::METHOD_IS_REQUIRED) {
-                    throw new Exception\MissingPropertyException('Missing property for parameter ' . $position . ' of method ' . $class . '::' . $method);
+                    throw new Exception\MissingPropertyException('Missing property for parameter ' . $position . ' of method ' . $type . '::' . $method);
                 }
 
                 return null;

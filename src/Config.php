@@ -10,14 +10,78 @@
 namespace Zend\Di;
 
 use Traversable;
-use Zend\Di\Definition\ArrayDefinition;
-use Zend\Di\Definition\RuntimeDefinition;
 use Zend\Stdlib\ArrayUtils;
 
 /**
- * Configures Di instances
+ * Provides a DI configuration from an array
+ *
+ * This configures the instanciation process of the dependency injector
+ *
+ * **Example:**
+ * ```php
+ * return [
+ *     // This section provides global type preferences
+ *     // Those are visited if a specific instance has no preference definions
+ *     'preferences' => [
+ *         // The key is the requested class or interface name, the values are
+ *         // the types the dependency injector should prefer
+ *         Some\Interface::class => [
+ *             Some\Preference1::class,
+ *             'My.AliasPreference'
+ *         ],
+ *     ],
+ *     // This configures the instanciation of specific types
+ *     // Types may also be purely virtual by defining the aliasOf key.
+ *     'instances' => [
+ *         My\Class::class => [
+ *              'preferences' => [
+ *                  // this superseds the global type preferences
+ *                  // when My\Class is instanciated
+ *                  Some\Interface::class => [ 'My.SpecificAlias' ]
+ *              ],
+ *              'injections' => [
+ *                  // This section may provide injections for methods which are defined by definiton
+ *                  // and arbitary methods
+ *
+ *                  // Methods known to DI via the DI definitions, may be configured with named parameters
+ *                  '__construct' => [
+ *                      'foo' => My\FooImpl::class, // Use the given type to provide the injection (depends on definition)
+ *                      'bar' => '*' // Use the type preferences
+ *                  ],
+ *                  // Assuming setSomething is not in the DI class defintions, the values will be
+ *                  // injected to the method as POSITIONAL method arguments
+ *                  'setSomething' => [
+ *                      'A literal String Value'
+ *                  ],
+ *              ]
+ *         ],
+ *
+ *         'My.Alias' => [
+ *             // typeOf defines virtual classes which can be used as type perferences or for
+ *             // newInstance calls. They allow providing a different configs for a class
+ *             'typeOf' => Some\Class::class,
+ *             'preferences' => [
+ *                  Foo::class => Bar::class
+ *             ]
+ *         ]
+ *     ]
+ * ];
+ * ```
+ *
+ * ## Notes on Injections
+ *
+ * Named arguments and Automatic type lookups will only work for Methods that are known to the dependency injector
+ * through its definitions. Injections for unknown methods do not perform type lookups on its own.
+ *
+ * A value injection without any lookups can be forced by providing a Resolver\ValueInjection instance.
+ *
+ * To force a service/class instance provide a Resolver\TypeInjection instance. For classes known from
+ * the definitions, a type preference might be the better approach
+ *
+ * @see Zend\Di\Resolver\ValueInjection A container to force injection of a value
+ * @see Zend\Di\Resolver\TypeInjection  A container to force looking up a specific type instance for injection
  */
-class Config
+class Config implements ConfigInterface
 {
     /**
      * @var array
@@ -45,152 +109,87 @@ class Config
     }
 
     /**
-     * Configure
-     *
-     * @param  Di   $di
-     * @return void
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getAllInjectionMethods()
      */
-    public function configure(Di $di)
+    public function getAllInjectionMethods($type)
     {
-        if (isset($this->data['definition'])) {
-            $this->configureDefinition($di, $this->data['definition']);
+        if (!isset($this->data['instances'][$type]['injections']) || !is_array($this->data['types'][$type]['injections'])) {
+            return [];
         }
-        if (isset($this->data['instance'])) {
-            $this->configureInstance($di, $this->data['instance']);
-        }
+
+        return array_keys($this->data['instances'][$type]['injections']);
     }
 
     /**
-     * @param Di    $di
-     * @param array $definition
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getClassForAlias()
      */
-    public function configureDefinition(Di $di, $definition)
+    public function getClassForAlias($name)
     {
-        foreach ($definition as $definitionType => $definitionData) {
-            switch ($definitionType) {
-                case 'compiler':
-                    foreach ($definitionData as $filename) {
-                        if (is_readable($filename)) {
-                            $di->definitions()->addDefinition(new ArrayDefinition(include $filename), false);
-                        }
-                    }
-                    break;
-                case 'runtime':
-                    if (isset($definitionData['enabled']) && !$definitionData['enabled']) {
-                        // Remove runtime from definition list if not enabled
-                        $definitions = [];
-                        foreach ($di->definitions() as $definition) {
-                            if (!$definition instanceof RuntimeDefinition) {
-                                $definitions[] = $definition;
-                            }
-                        }
-                        $definitionList = new DefinitionList($definitions);
-                        $di->setDefinitionList($definitionList);
-                    } elseif (isset($definitionData['use_annotations']) && $definitionData['use_annotations']) {
-                        /* @var $runtimeDefinition Definition\RuntimeDefinition */
-                        $runtimeDefinition = $di
-                            ->definitions()
-                            ->getDefinitionByType('\Zend\Di\Definition\RuntimeDefinition');
-                        $runtimeDefinition->getIntrospectionStrategy()->setUseAnnotations(true);
-                    }
-                    break;
-                case 'class':
-                    foreach ($definitionData as $className => $classData) {
-                        $classDefinitions = $di->definitions()->getDefinitionsByType('Zend\Di\Definition\ClassDefinition');
-                        foreach ($classDefinitions as $classDefinition) {
-                            if (!$classDefinition->hasClass($className)) {
-                                unset($classDefinition);
-                            }
-                        }
-                        if (!isset($classDefinition)) {
-                            $classDefinition = new Definition\ClassDefinition($className);
-                            $di->definitions()->addDefinition($classDefinition, false);
-                        }
-                        foreach ($classData as $classDefKey => $classDefData) {
-                            switch ($classDefKey) {
-                                case 'instantiator':
-                                    $classDefinition->setInstantiator($classDefData);
-                                    break;
-                                case 'supertypes':
-                                    $classDefinition->setSupertypes($classDefData);
-                                    break;
-                                case 'methods':
-                                case 'method':
-                                    foreach ($classDefData as $methodName => $methodInfo) {
-                                        if (isset($methodInfo['required'])) {
-                                            $classDefinition->addMethod($methodName, $methodInfo['required']);
-                                            unset($methodInfo['required']);
-                                        }
-                                        foreach ($methodInfo as $paramName => $paramInfo) {
-                                            $classDefinition->addMethodParameter($methodName, $paramName, $paramInfo);
-                                        }
-                                    }
-                                    break;
-                                default:
-                                    $methodName = $classDefKey;
-                                    $methodInfo = $classDefData;
-                                    if (isset($classDefData['required'])) {
-                                        $classDefinition->addMethod($methodName, $methodInfo['required']);
-                                        unset($methodInfo['required']);
-                                    }
-                                    foreach ($methodInfo as $paramName => $paramInfo) {
-                                        $classDefinition->addMethodParameter($methodName, $paramName, $paramInfo);
-                                    }
-                            }
-                        }
-                    }
-            }
+        if (isset($this->data['instances'][$name]['aliasOf'])) {
+            return $this->data['instances'][$name]['aliasOf'];
         }
+
+        return null;
     }
 
     /**
-     * Configures a given Di instance
-     *
-     * @param Di $di
-     * @param $instanceData
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getInjections()
      */
-    public function configureInstance(Di $di, $instanceData)
+    public function getInjections($type, $method)
     {
-        $im = $di->instanceManager();
-
-        foreach ($instanceData as $target => $data) {
-            switch (strtolower($target)) {
-                case 'aliases':
-                case 'alias':
-                    foreach ($data as $n => $v) {
-                        $im->addAlias($n, $v);
-                    }
-                    break;
-                case 'preferences':
-                case 'preference':
-                    foreach ($data as $n => $v) {
-                        if (is_array($v)) {
-                            foreach ($v as $v2) {
-                                $im->addTypePreference($n, $v2);
-                            }
-                        } else {
-                            $im->addTypePreference($n, $v);
-                        }
-                    }
-                    break;
-                default:
-                    foreach ($data as $n => $v) {
-                        switch ($n) {
-                            case 'parameters':
-                            case 'parameter':
-                                $im->setParameters($target, $v);
-                                break;
-                            case 'injections':
-                            case 'injection':
-                                $im->setInjections($target, $v);
-                                break;
-                            case 'shared':
-                            case 'share':
-                                $im->setShared($target, $v);
-                                break;
-                        }
-                    }
-            }
+        if (!isset($this->data['instances'][$type]['injections'][$method])) {
+            return [];
         }
+
+        return $this->data['instances'][$type]['injections'][$method];
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getTypePreferences()
+     */
+    public function getTypePreferences($type)
+    {
+        if (!isset($this->data['preferences'][$type])) {
+            return [];
+        }
+
+        $preference = $this->data['preferences'][$type];
+        if (!is_array($preference) && !($preference instanceof \Traversable)) {
+            $preference = [$preference];
+        }
+
+        return $preference;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getTypePreferencesForClass()
+     */
+    public function getTypePreferencesForClass($type, $classOrAlias)
+    {
+        if (!isset($this->data['instances'][$classOrAlias]['preferences'][$type])) {
+            return $this->getTypePreferences($type);
+        }
+
+        $preference = $this->data['instances'][$classOrAlias]['preferences'][$type];
+
+        if (!is_array($preference) && !($preference instanceof Traversable)) {
+            $preference = [$preference];
+        }
+
+        return $preference;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::isAlias()
+     */
+    public function isAlias($name)
+    {
+        return isset($this->data['instances'][$name]['aliasOf']);
     }
 }

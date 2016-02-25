@@ -12,29 +12,29 @@ namespace Zend\Di\Definition;
 interface DefinitionInterface
 {
     /**
-     * use only specified parameters
+     * The method is completely optional and may be omitted if no dependencies can be provided
      */
     const METHOD_IS_OPTIONAL = 0;
 
     /**
-     * resolve mode RESOLVE_EAGER | RESOLVE_STRICT
+     * Marks the method as requirement in both modes (MODE_EAGER and MODE_STRICT)
      */
     const METHOD_IS_REQUIRED = 3;
 
     /**
-     * This method is a constructor
+     * Marks a method as requirement in resolver mode MODE_EAGER
+     */
+    const METHOD_IS_EAGER = 1;
+
+    /**
+     * The method is a constructor
      */
     const METHOD_IS_CONSTRUCTOR = self::METHOD_IS_REQUIRED;
 
     /**
      * Definitions comming from interfaces (Aware)
      */
-    const METHOD_IS_AWARE = self::METHOD_IS_OPTIONAL;
-
-    /**
-     * resolve mode RESOLVE_EAGER
-     */
-    const METHOD_IS_EAGER = 1;
+    const METHOD_IS_AWARE = self::METHOD_IS_EAGER;
 
     /**
      * Retrieves all classes in this definition
@@ -85,6 +85,15 @@ interface DefinitionInterface
      * @return string[]
      */
     public function getMethods($class);
+
+    /**
+     * Returns the methods requirement type
+     *
+     * @param  string   $class
+     * @param  string   $method
+     * @return int
+     */
+    public function getMethodRequirementType($class, $method);
 
     /**
      * Check whether the the method is defined as injectable for the given class

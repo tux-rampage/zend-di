@@ -111,30 +111,26 @@ class PhpClass
     public function addInjectionMethod(InjectionMethod $injectionMethod)
     {
         $this->injectionMethods[] = $injectionMethod;
-
         return $this;
     }
 
     /**
      * Create and register an injection method
      *
-     * Optionally takes the method name.
-     *
      * This method may be used in lieu of addInjectionMethod() in
      * order to provide a more fluent interface for building classes with
      * injection methods.
      *
-     * @param  null|string     $name
+     * @param  string           $name
      * @return InjectionMethod
      */
-    public function createInjectionMethod($name = null)
+    public function createInjectionMethod($name)
     {
         $builder = $this->defaultMethodBuilder;
         /* @var $method InjectionMethod */
         $method  = new $builder();
-        if (null !== $name) {
-            $method->setName($name);
-        }
+
+        $method->setName($name);
         $this->addInjectionMethod($method);
 
         return $method;
@@ -163,6 +159,23 @@ class PhpClass
     public function getMethodBuilder()
     {
         return $this->defaultMethodBuilder;
+    }
+
+    /**
+     * Returns an injection method by name
+     *
+     * @param  string               $name   The method name
+     * @return null|InjectionMethod         The method builder or null if there is no such method
+     */
+    public function getInjectionMethod($name)
+    {
+        foreach ($this->injectionMethods as $method) {
+            if ($method->getName() == $name) {
+                return $method;
+            }
+        }
+
+        return null;
     }
 
     /**

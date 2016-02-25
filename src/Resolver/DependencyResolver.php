@@ -21,6 +21,22 @@ use Zend\Di\ConfigInterface;
 class DependencyResolver implements DependencyResolverInterface
 {
     /**
+     * Require as many things as possible
+     *
+     * Depends on the definition, this will cause the resolver to fail
+     * on dependencies that are marked as eager as well
+     */
+    const MODE_EAGER = 2;
+
+    /**
+     * Only essentially required methods
+     *
+     * This will cause the resolver to only fail on methods marked as
+     * Required.
+     */
+    const MODE_STRICT = 1;
+
+    /**
      * @var ConfigInterface
      */
     protected $config;
@@ -34,6 +50,13 @@ class DependencyResolver implements DependencyResolverInterface
      * @var ContainerInterface
      */
     protected $serviceLocator = null;
+
+    /**
+     * The resolver mode
+     *
+     * @var int
+     */
+    protected $mode = self::MODE_STRICT;
 
     /**
      * @var string[]
@@ -130,6 +153,22 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
+     * Set the resolver mode.
+     *
+     * Changes the resolver mode to strict or eager.
+     *
+     * See the `MODE_*` constants for details.
+     *
+     * @param  int  $mode   The new resolver mode
+     * @return self
+     */
+    public function setMode($mode)
+    {
+        $this->mode = (int)$mode;
+        return $this;
+    }
+
+    /**
      * @see \Zend\Di\Resolver\DependencyResolverInterface::setServiceLocator()
      */
     public function setServiceLocator(ContainerInterface $serviceLocator)
@@ -149,6 +188,15 @@ class DependencyResolver implements DependencyResolverInterface
      */
     protected function checkValueToInject($value, $requiredType)
     {
+        // Case configuration enforces a type injection
+        if ($value instanceof TypeInjection) {
+            if (!$this->isTypeOf($value->getType(), $requiredType)) {
+                return null;
+            }
+
+            return $value->getType();
+        }
+
         // Case: The definition does not require a type - any value is allowed
         if (!$requiredType) {
             return new ValueInjection($value);
@@ -171,6 +219,7 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
+     * {@inheritDoc}
      * @see \Zend\Di\Resolver\DependencyResolverInterface::resolveMethodParameters()
      */
     public function resolveMethodParameters($requestedType, $method)
@@ -188,6 +237,21 @@ class DependencyResolver implements DependencyResolverInterface
 
         $result = [];
         $params = $this->definition->getMethodParameters($class, $method);
+
+        // This method is not known - take the injections as literal
+        if (!$this->definition->hasMethod($class, $method)) {
+            foreach ($injections as $injection) {
+                if ($injection instanceof TypeInjection) {
+                    $result[] = $injection->getType();
+                } else {
+                    $result[] = new ValueInjection($injection);
+                }
+            }
+
+            return $result;
+        }
+
+        $methodRequirement = $this->definition->
 
         foreach ($params as $paramInfo) {
             $name = $paramInfo->name;
@@ -212,9 +276,13 @@ class DependencyResolver implements DependencyResolverInterface
             if ($type && !$this->isInternalType($type)) {
                 $preference = $this->resolvePreference($type, $requestedType);
 
-                if ($preference) {
+                if ($preference && ($this->serviceLocator->has($preference))) {
                     $result[$name] = $preference;
                     continue;
+                }
+
+                if ($this->serviceLocator->has($type)) {
+                    $result[$name] = $type;
                 }
             }
 

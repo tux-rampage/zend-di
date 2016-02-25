@@ -9,8 +9,6 @@
 
 namespace Zend\Di\Definition;
 
-use Zend\Di\Definition\Builder\InjectionMethod;
-use Zend\Di\Di;
 
 /**
  * Class definitions for a single class
@@ -81,12 +79,14 @@ class ClassDefinition implements DefinitionInterface, PartialMarker
     {
         if ($isRequired === null) {
             if ($method === '__construct') {
-                $methodRequirementType = Di::METHOD_IS_CONSTRUCTOR;
+                $methodRequirementType = self::METHOD_IS_CONSTRUCTOR;
             } else {
-                $methodRequirementType = Di::METHOD_IS_OPTIONAL;
+                $methodRequirementType = self::METHOD_IS_OPTIONAL;
             }
+        } else if (is_int($isRequired)) {
+            $methodRequirementType = $isRequired;
         } else {
-            $methodRequirementType = InjectionMethod::detectMethodRequirement($isRequired);
+            $methodRequirementType = $isRequired? self::METHOD_IS_REQUIRED : self::METHOD_IS_OPTIONAL;
         }
 
         $this->methods[$method] = $methodRequirementType;
@@ -104,9 +104,9 @@ class ClassDefinition implements DefinitionInterface, PartialMarker
     {
         if (!array_key_exists($method, $this->methods)) {
             if ($method === '__construct') {
-                $this->methods[$method] = Di::METHOD_IS_CONSTRUCTOR;
+                $this->methods[$method] = self::METHOD_IS_CONSTRUCTOR;
             } else {
-                $this->methods[$method] = Di::METHOD_IS_OPTIONAL;
+                $this->methods[$method] = self::METHOD_IS_OPTIONAL;
             }
         }
 
@@ -227,5 +227,18 @@ class ClassDefinition implements DefinitionInterface, PartialMarker
         }
 
         return;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
+     */
+    public function getMethodRequirementType($class, $method)
+    {
+        if (!$this->hasMethod($class, $method)) {
+            return self::METHOD_IS_OPTIONAL;
+        }
+
+        return $this->methods[$method];
     }
 }

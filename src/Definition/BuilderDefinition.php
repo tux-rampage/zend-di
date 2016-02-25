@@ -12,7 +12,21 @@ namespace Zend\Di\Definition;
 use Zend\Di\Exception;
 
 /**
- * Class definitions based on a configuration array
+ * Definition builder
+ *
+ * The definition builder allows creating class definitions programmatically
+ *
+ * **Example:**
+ * ```php
+ * $builder = new BuilderDefinition();
+ * $builder->createClass(Foo::class)
+ *     ->createMethod('setBar')
+ *     ->addParameter('bar', Bar::class, true);
+ * ```
+ *
+ * @todo Rename to DefintionBuilder
+ * @uses Builder\PhpClass           The class builder
+ * @uses Builder\InjectionMethod    The method builder
  */
 class BuilderDefinition implements DefinitionInterface
 {
@@ -25,46 +39,6 @@ class BuilderDefinition implements DefinitionInterface
      * @var Builder\PhpClass[]
      */
     protected $classes = [];
-
-    /**
-     * Create classes from array
-     *
-     * @param  array $builderData
-     * @return void
-     */
-    public function createClassesFromArray(array $builderData)
-    {
-        foreach ($builderData as $className => $classInfo) {
-            $class = new Builder\PhpClass();
-            $class->setName($className);
-            foreach ($classInfo as $type => $typeData) {
-                switch (strtolower($type)) {
-                    case 'supertypes':
-                        foreach ($typeData as $superType) {
-                            $class->addSuperType($superType);
-                        }
-                        break;
-                    case 'instantiator':
-                        $class->setInstantiator($typeData);
-                        break;
-                    case 'methods':
-                    case 'method':
-                        foreach ($typeData as $injectionMethodName => $injectionMethodData) {
-                            $injectionMethod = new Builder\InjectionMethod();
-                            $injectionMethod->setName($injectionMethodName);
-                            foreach ($injectionMethodData as $parameterName => $parameterType) {
-                                $parameterType = ($parameterType) ?: null; // force empty string to null
-                                $injectionMethod->addParameter($parameterName, $parameterType);
-                            }
-                            $class->addInjectionMethod($injectionMethod);
-                        }
-                        break;
-
-                }
-            }
-            $this->addClass($class);
-        }
-    }
 
     /**
      * Add class
@@ -226,6 +200,7 @@ class BuilderDefinition implements DefinitionInterface
         if ($class === false) {
             throw new Exception\RuntimeException('Cannot find class object in this builder definition.');
         }
+
         $methods = $class->getInjectionMethods();
         $methodNames = [];
 
@@ -235,6 +210,26 @@ class BuilderDefinition implements DefinitionInterface
         }
 
         return $methodNames;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
+     */
+    public function getMethodRequirementType($class, $method)
+    {
+        $class = $this->getClass($class);
+        if ($class === false) {
+            throw new Exception\RuntimeException('Cannot find class object in this builder definition.');
+        }
+
+        $method = $class->getInjectionMethod($method);
+
+        if (!$method) {
+            return self::METHOD_IS_OPTIONAL;
+        }
+
+        return $method->getRequirementType();
     }
 
     /**

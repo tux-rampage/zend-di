@@ -9,7 +9,7 @@
 
 namespace Zend\Di\Definition\Builder;
 
-use Zend\Di\Di;
+use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\Definition\MethodParameter;
 
 /**
@@ -28,11 +28,20 @@ class InjectionMethod
     protected $parameters = [];
 
     /**
+     * @var int
+     */
+    protected $requirementType = DefinitionInterface::METHOD_IS_OPTIONAL;
+
+    /**
      * @param  string|null $name
      * @return self
      */
     public function setName($name)
     {
+        if ($name == '__construct') {
+            return DefinitionInterface::METHOD_IS_CONSTRUCTOR;
+        }
+
         $this->name = $name;
         return $this;
     }
@@ -43,6 +52,39 @@ class InjectionMethod
     public function getName()
     {
         return $this->name;
+    }
+
+    /**
+     * Returns the method's requirement type
+     *
+     * @return int
+     */
+    public function getRequirementType()
+    {
+        return $this->requirementType;
+    }
+
+    /**
+     * Sets the requirement type for the resolver
+     *
+     * @param int $requirementType
+     * @return self
+     */
+    public function setRequirementType($requirementType)
+    {
+        $this->requirementType = (int)$requirementType;
+        return $this;
+    }
+
+    /**
+     * Shorthand method for `setRequirementType(DefinitionInterface::METHOD_IS_REQUIRED)`
+     *
+     * @return self
+     */
+    public function setRequired()
+    {
+        $this->requirementType = DefinitionInterface::METHOD_IS_REQUIRED;
+        return $this;
     }
 
     /**
@@ -72,14 +114,5 @@ class InjectionMethod
     {
         return $this->parameters;
     }
-
-    /**
-     * @deprecated
-     * @param mixed $requirement
-     * @return int
-     */
-    public static function detectMethodRequirement($requirement)
-    {
-        return 0;
-    }
 }
+

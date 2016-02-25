@@ -9,7 +9,6 @@
 
 namespace Zend\Di\Resolver;
 
-use Zend\Di\Exception;
 use Zend\Di\Exception\RuntimeException;
 
 
@@ -44,8 +43,10 @@ class ValueInjection
     }
 
     /**
+     * Exports the encapsulated value to php code
+     *
      * @return string
-     * @throws Exception\UnexportableValueException
+     * @throws RuntimeException
      */
     public function export()
     {

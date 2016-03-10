@@ -23,7 +23,11 @@ interface StrategyInterface
     /**
      * Reflect the parameter type
      *
+     * This should return the required type name. This might
+     * either be a FQCN or a buildin type name (i.e. string or int)
+     *
      * @param \ReflectionParameter $parameter
+     * @return string|null
      */
     public function reflectParameterType(ReflectionParameter $parameter);
 

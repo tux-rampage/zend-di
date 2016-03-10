@@ -9,9 +9,33 @@
 
 namespace Zend\Di;
 
+use Zend\ModuleManager\Feature\ConfigProviderInterface;
+
+
 /**
- * @todo ZF Module definition
+ * Provides Module functionality for Zend Framework 3 applications
+ *
+ * To add the DI integration to your application, add it to the ZF modules list:
+ *
+ * ```php
+ *  // application.config.php
+ *  return [
+ *      // ...
+ *      'modules' => [
+ *          'Zend\\Di',
+ *          // ...
+ *      ]
+ *  ];
+ * ```
  */
-class Module
+class Module implements ConfigProviderInterface
 {
+    /**
+     * {@inheritDoc}
+     * @see \Zend\ModuleManager\Feature\ConfigProviderInterface::getConfig()
+     */
+    public function getConfig()
+    {
+        return require __DIR__ . '/../config/module.dist.php';
+    }
 }

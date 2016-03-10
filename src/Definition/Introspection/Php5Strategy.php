@@ -9,17 +9,25 @@
 
 namespace Zend\Di\Definition\Introspection;
 
+use ReflectionParameter;
+
 /**
  * Introspection strategy for PHP5
  */
-class Php5Strategy implements StrategyInterface
+class Php5Strategy extends DefaultStrategy implements StrategyInterface
 {
     /**
      * {@inheritDoc}
      * @see \Zend\Di\Definition\Introspection\StrategyInterface::reflectParameterType()
      */
-    public function reflectParameterType(\ReflectionParameter $parameter)
+    public function reflectParameterType(ReflectionParameter $parameter)
     {
-        // TODO Auto-generated method stub
+        $class = $parameter->getClass();
+
+        if (!$class) {
+            return null;
+        }
+
+        return $class->getName();
     }
 }

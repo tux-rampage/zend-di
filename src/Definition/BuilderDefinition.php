@@ -49,14 +49,14 @@ class BuilderDefinition implements DefinitionInterface
     public function addClass(Builder\PhpClass $phpClass)
     {
         $this->classes[] = $phpClass;
-
         return $this;
     }
 
     /**
      * Create a class builder object using default class builder class
      *
-     * This method is a factory that can be used in place of addClass().
+     * This method is a factory that can be used to provide the parameter
+     * for addClass().
      *
      * @param  null|string      $name Optional name of class to assign
      * @return Builder\PhpClass
@@ -70,8 +70,6 @@ class BuilderDefinition implements DefinitionInterface
         if (null !== $name) {
             $class->setName($name);
         }
-
-        $this->addClass($class);
 
         return $class;
     }

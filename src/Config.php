@@ -89,9 +89,13 @@ class Config implements ConfigInterface
     protected $data = [];
 
     /**
-     * Constructor
+     * Construct from option array
      *
-     * @param  array|Traversable                  $options
+     * Utilizes the given options array or traversable.
+     *
+     * @param  array|Traversable    $options    The options array. Traversables
+     *                                          will be converted to an array
+     *                                          internally
      * @throws Exception\InvalidArgumentException
      */
     public function __construct($options)

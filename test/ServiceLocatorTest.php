@@ -10,24 +10,52 @@
 namespace ZendTest\Di;
 
 use Zend\Di\ServiceLocator;
+use Zend\Di\DependencyInjectionInterface;
+
 use PHPUnit_Framework_TestCase as TestCase;
 
+/**
+ * Test the service locator
+ */
 class ServiceLocatorTest extends TestCase
 {
-    public function setUp()
+    /**
+     * Dependency injector mock
+     *
+     * @var \PHPUnit_Framework_MockObject_MockObject|DependencyInjectionInterface
+     */
+    private $diMock;
+
+    /**
+     * Service locator instance to test
+     *
+     * @var ServiceLocator
+     */
+    private $services;
+
+    /**
+     * Testcase setup
+     */
+    protected function setUp()
     {
-        $this->services = new ServiceLocator();
+        $this->diMock = $this->getMockForAbstractClass(DependencyInjectionInterface::class);
+        $this->services = new ServiceLocator($this->diMock);
     }
 
-    public function testRetrievingUnknownServiceResultsInNullValue()
+    public function testRetrievingWillUseDiInstance()
     {
+        $this->diMock->expects($this->atLeastOnce())
+            ->method('newInstance')
+            ->with('foo')
+            ->willReturn(null);
+
         $this->assertNull($this->services->get('foo'));
     }
 
     public function testCanRetrievePreviouslyRegisteredServices()
     {
         $s = new \stdClass;
-        $this->services->set('foo', $s);
+        $this->services->setInstance('foo', $s);
         $test = $this->services->get('foo');
         $this->assertSame($s, $test);
     }
@@ -36,8 +64,8 @@ class ServiceLocatorTest extends TestCase
     {
         $s = new \stdClass();
         $t = new \stdClass();
-        $this->services->set('foo', $s);
-        $this->services->set('foo', $t);
+        $this->services->setInstance('foo', $s);
+        $this->services->setInstance('foo', $t);
         $test = $this->services->get('foo');
         $this->assertSame($t, $test);
     }
@@ -45,7 +73,7 @@ class ServiceLocatorTest extends TestCase
     public function testRetrievingAServiceMultipleTimesReturnsSameInstance()
     {
         $s = new \stdClass();
-        $this->services->set('foo', $s);
+        $this->services->setInstance('foo', $s);
         $test1 = $this->services->get('foo');
         $test2 = $this->services->get('foo');
         $this->assertSame($s, $test1);
@@ -53,72 +81,18 @@ class ServiceLocatorTest extends TestCase
         $this->assertSame($test1, $test2);
     }
 
-    public function testRegisteringCallbacksReturnsReturnValueWhenServiceRequested()
+    public function testHasUsesDiInstanceIfLocatorDoesNotKnowOfService()
     {
-        $this->services->set('foo', function () {
-            $object = new \stdClass();
-            $object->foo = 'FOO';
-            return $object;
-        });
-        $test = $this->services->get('foo');
-        $this->assertInstanceOf('stdClass', $test);
-        $this->assertEquals('FOO', $test->foo);
-    }
+        $this->diMock->expects($this->atLeastOnce())
+            ->method('canInstanciate')
+            ->willReturn(false);
 
-    public function testReturnValueOfCallbackIsCachedBetweenRequestsToService()
-    {
-        $this->services->set('foo', function () {
-            $object = new \stdClass();
-            $object->foo = 'FOO';
-            return $object;
-        });
-        $test1 = $this->services->get('foo');
-        $test2 = $this->services->get('foo');
-        $this->assertEquals('FOO', $test1->foo);
-        $this->assertSame($test1, $test2);
-    }
-
-    public function testParametersArePassedToCallbacks()
-    {
-        $this->services->set('foo', function () {
-            $object = new \stdClass();
-            $object->params = func_get_args();
-            return $object;
-        });
-
-        $params = ['foo', 'bar'];
-        $test = $this->services->get('foo', $params);
-        $this->assertEquals($params, $test->params);
-    }
-
-    public function testGetProxiesToMappedMethods()
-    {
-        $sc = new TestAsset\ContainerExtension();
-        $sc->foo = 'FOO';
-        $this->assertEquals('FOO', $sc->get('foo'));
-    }
-
-    public function testProxiedMethodsReceiveParametersPassedToGet()
-    {
-        $sc = new TestAsset\ContainerExtension();
-        $params = ['foo' => 'FOO'];
-        $test = $sc->get('params', $params);
-        $this->assertEquals($params, $test);
-        $this->assertEquals($params, $sc->params);
-    }
-
-    public function testHasReturnsFalseIfLocatorDoesNotKnowOfService()
-    {
         $this->assertFalse($this->services->has('does-not-exist'));
     }
 
     public function testHasReturnsTrueIfLocatorKnowsOfService()
     {
-        $this->services->set('foo', function () {
-            // Implementation does not matter for this test
-            return $this;
-        });
-
+        $this->services->setInstance('foo', new \stdClass());
         $this->assertTrue($this->services->has('foo'));
     }
 }

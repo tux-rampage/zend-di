@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file, in reverse chronological order by release.
 
+## 3.0.0 - TBD
+
+### Added
+
+- A definition compiler which will utilize `RuntimeDefinition` for Consistency to compile.
+- Setters without parameters will not be created by `RuntimeDefinition` (and therefore not accidentially called)
+- `Zend\Di\ServiceLocator` now implements `Interop\Container\ContainerInterface` and utilizes the dependency injector to be completely exchangible
+- `Zend\Di\Container` as implementation of `Interop\Container\ContainerInterface`
+  * Provides the dependency injector as standalone container
+  * Provides `build()` to be signature compatible with `Zend\ServiceManager\ServiceManager`
+- `Zend\Di\DependencyInjectorInterface`
+  * Provides instanciator to create new instances
+  * Is used by `Zend\Di\ServiceLocator` and `Zend\Di\Container`
+  * Utilizes `Zend\Di\Resolver\DependencyResolverInterface`
+- Moved strategies to resolve method parameters to `Zend\Di\Resolver`
+- PHP7 compatible introspection strategies
+- Classes to wrap value and type injections
+- Support for zend-component-installer
+- An interface for the di configuration
+
+### Deprecated
+
+- Nothing
+
+### Removed
+
+- `get()` does no longer support a `$parameters` array, `newInstance()` still does
+- Parameters passed to `newInstance()` will only be used for constructing the requested class and no longer be forwarded to nested instanciations.
+- In `Zend\Di\Definition\BuilderDefinition`
+  * Removed `createClassesFromArray()` - Obsolete since there is an array definition
+- Removed `Zend\Di\Defintion\CompilerDefinition` in favour of the `Zend\Di\Definition\Compiler` implementation, which creates an array definition
+- `InstanceManager` in favour of `Interop\Container\ContainerInterface`
+- `Zend\Di\Di` is removed in favour of `Zend\Di\Container`
+- Separated the definition from the configuration.
+
+### Fixed
+
+- Nothing
+
+
 ## 2.7.0 - TBD
 
 ### Added

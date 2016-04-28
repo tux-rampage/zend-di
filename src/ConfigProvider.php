@@ -15,10 +15,25 @@ namespace Zend\Di;
  */
 class ConfigProvider
 {
+    /**
+     * Implements the config provider
+     *
+     * @return array The configuration for zend-expressive
+     */
     public function __invoke()
     {
         return [
-            // TODO: Implement dependencies
+            'dependencies' => $this->getDependencyConfig()
         ];
+    }
+
+    /**
+     * Returns the dependency (service manager) configuration
+     *
+     * @return array
+     */
+    public function getDependencyConfig()
+    {
+        return [];
     }
 }

@@ -9,13 +9,12 @@
 
 namespace Zend\Di;
 
-use Zend\ModuleManager\Feature\ConfigProviderInterface;
-
 
 /**
  * Provides Module functionality for Zend Framework 3 applications
  *
- * To add the DI integration to your application, add it to the ZF modules list:
+ * To add the DI integration to your application use zend frameworks component installer or
+ * add `Zend\\Di` to the ZF modules list:
  *
  * ```php
  *  // application.config.php
@@ -28,14 +27,18 @@ use Zend\ModuleManager\Feature\ConfigProviderInterface;
  *  ];
  * ```
  */
-class Module implements ConfigProviderInterface
+class Module
 {
     /**
-     * {@inheritDoc}
-     * @see \Zend\ModuleManager\Feature\ConfigProviderInterface::getConfig()
+     * Returns the configuration for zend-mvc
+     *
+     * @return array
      */
     public function getConfig()
     {
-        return require __DIR__ . '/../config/module.dist.php';
+        $provider = new ConfigProvider();
+        return [
+            'service_manager' => $provider->getDependencyConfig(),
+        ];
     }
 }

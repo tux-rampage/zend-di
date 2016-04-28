@@ -55,8 +55,7 @@ class BuilderDefinition implements DefinitionInterface
     /**
      * Create a class builder object using default class builder class
      *
-     * This method is a factory that can be used to provide the parameter
-     * for addClass().
+     * This method is a factory that will automatically add the class to the builder definition
      *
      * @param  null|string      $name Optional name of class to assign
      * @return Builder\PhpClass
@@ -71,6 +70,7 @@ class BuilderDefinition implements DefinitionInterface
             $class->setName($name);
         }
 
+        $this->addClass($class);
         return $class;
     }
 
@@ -306,7 +306,7 @@ class BuilderDefinition implements DefinitionInterface
 
         /* @var $method Builder\InjectionMethod */
         foreach ($method->getParameters() as $name => $info) {
-            $methodParameters[$class->getName() . '::' . $method->getName() . ':' . $name] = $info;
+            $methodParameters[$name] = $info;
         }
 
         return $methodParameters;

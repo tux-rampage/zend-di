@@ -41,11 +41,11 @@
   ),
   'My\\RepositoryA' =>
   array (
-    'superTypes' =>
+    'supertypes' =>
     array (
     ),
     'instantiator' => '__construct',
-    'injectionMethods' =>
+    'injectionmethods' =>
     array (
       'setMapper' =>
       array (
@@ -55,12 +55,12 @@
   ),
   'My\\RepositoryB' =>
   array (
-    'superTypes' =>
+    'supertypes' =>
     array (
       0 => 'My\\RepositoryA',
     ),
     'instantiator' => NULL,
-    'Methods' =>
+    'methods' =>
     array (
     ),
   ),

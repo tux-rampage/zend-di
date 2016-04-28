@@ -103,7 +103,7 @@ class InjectionMethod
         $definition->default = $default;
         $definition->position = count($this->parameters);
 
-        $this->parameters[$name] = $name;
+        $this->parameters[$name] = $definition;
         return $this;
     }
 

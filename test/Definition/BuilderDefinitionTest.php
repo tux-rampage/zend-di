@@ -12,6 +12,7 @@ namespace ZendTest\Di\Definition;
 use Zend\Di\Definition\BuilderDefinition;
 use Zend\Di\Definition\Builder;
 use PHPUnit_Framework_TestCase as TestCase;
+use Zend\Di\Definition\MethodParameter;
 
 class BuilderDefinitionTest extends TestCase
 {
@@ -42,10 +43,17 @@ class BuilderDefinitionTest extends TestCase
         $this->assertTrue($definition->hasMethods('Foo'));
         $this->assertTrue($definition->hasMethod('Foo', 'injectBar'));
         $this->assertContains('injectBar', $definition->getMethods('Foo'));
-        $this->assertEquals(
-            ['Foo::injectBar:0' => ['bar', 'Bar', true, null]],
-            $definition->getMethodParameters('Foo', 'injectBar')
-        );
+
+
+        $params = $definition->getMethodParameters('Foo', 'injectBar');
+        $this->assertCount(1, $params);
+        $this->assertArrayHasKey('bar', $params);
+        $this->assertInstanceOf(MethodParameter::class, $params['bar']);
+        $this->assertEquals('bar', $params['bar']->name);
+        $this->assertNull($params['bar']->default);
+        $this->assertNull($params['bar']->isRequired);
+        $this->assertEquals(0, $params['bar']->position);
+        $this->assertEquals('Bar', $params['bar']->type);
     }
 
     public function testBuilderDefinitionHasMethodsThrowsRuntimeException()
@@ -70,45 +78,10 @@ class BuilderDefinitionTest extends TestCase
         $this->assertTrue($definition->hasMethods('Foo'));
     }
 
-    public function testBuilderCanBuildFromArray()
-    {
-        $ini = include __DIR__ . '/../_files/sample-definitions.php';
-        $iniAsArray = $ini['section-b'];
-        $definitionArray = $iniAsArray['di']['definitions'][1];
-        unset($definitionArray['class']);
-
-        $definition = new BuilderDefinition();
-        $definition->createClassesFromArray($definitionArray);
-
-        $this->assertTrue($definition->hasClass('My\DbAdapter'));
-        $this->assertEquals('__construct', $definition->getInstantiator('My\DbAdapter'));
-        $this->assertEquals(
-            [
-                'My\DbAdapter::__construct:0' => ['username', null, true, null],
-                'My\DbAdapter::__construct:1' => ['password', null, true, null],
-            ],
-            $definition->getMethodParameters('My\DbAdapter', '__construct')
-        );
-
-        $this->assertTrue($definition->hasClass('My\Mapper'));
-        $this->assertEquals('__construct', $definition->getInstantiator('My\Mapper'));
-        $this->assertEquals(
-            ['My\Mapper::__construct:0' => ['dbAdapter', 'My\DbAdapter', true, null]],
-            $definition->getMethodParameters('My\Mapper', '__construct')
-        );
-
-        $this->assertTrue($definition->hasClass('My\Repository'));
-        $this->assertEquals('__construct', $definition->getInstantiator('My\Repository'));
-        $this->assertEquals(
-            ['My\Repository::__construct:0' => ['mapper', 'My\Mapper', true, null]],
-            $definition->getMethodParameters('My\Repository', '__construct')
-        );
-    }
-
     public function testCanCreateClassFromFluentInterface()
     {
         $builder = new BuilderDefinition();
-        $class = $builder->createClass('Foo');
+        $class = $builder->addClass($builder->createClass('Foo'));
 
         $this->assertTrue($builder->hasClass('Foo'));
     }
@@ -127,14 +100,23 @@ class BuilderDefinitionTest extends TestCase
         $this->assertTrue($builder->hasMethod('Foo', 'setBar'));
         $this->assertTrue($builder->hasMethod('Foo', 'setConfig'));
 
-        $this->assertEquals(
-            ['Foo::setBar:0' => ['bar', 'Bar', true, null]],
-            $builder->getMethodParameters('Foo', 'setBar')
-        );
-        $this->assertEquals(
-            ['Foo::setConfig:0' => ['config', null, true, null]],
-            $builder->getMethodParameters('Foo', 'setConfig')
-        );
+        $params = $builder->getMethodParameters('Foo', 'setBar');
+        $this->assertArrayHasKey('bar', $params);
+        $this->assertInstanceOf(MethodParameter::class, $params['bar']);
+        $this->assertEquals('bar', $params['bar']->name);
+        $this->assertNull($params['bar']->default);
+        $this->assertNull($params['bar']->isRequired);
+        $this->assertEquals(0, $params['bar']->position);
+        $this->assertEquals('Bar', $params['bar']->type);
+
+        $params = $builder->getMethodParameters('Foo', 'setConfig');
+        $this->assertArrayHasKey('config', $params);
+        $this->assertInstanceOf(MethodParameter::class, $params['config']);
+        $this->assertEquals('config', $params['config']->name);
+        $this->assertNull($params['config']->default);
+        $this->assertNull($params['config']->isRequired);
+        $this->assertEquals(0, $params['config']->position);
+        $this->assertNull($params['config']->type);
     }
 
     public function testBuilderCanSpecifyClassToUseWithCreateClass()

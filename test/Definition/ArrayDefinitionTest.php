@@ -72,24 +72,4 @@ class ArrayDefinitionTest extends TestCase
         $this->assertEquals('__construct', $this->definition->getInstantiator('My\RepositoryA'));
         $this->assertNull($this->definition->getInstantiator('My\Foo'));
     }
-
-    public function testArrayDefinitionHasInjectionMethods()
-    {
-        $this->markTestIncomplete();
-    }
-
-    public function testArrayDefinitionHasInjectionMethod()
-    {
-        $this->markTestIncomplete();
-    }
-
-    public function testArrayDefinitionGetInjectionMethods()
-    {
-        $this->markTestIncomplete();
-    }
-
-    public function testArrayDefinitionGetInjectionMethodParameters()
-    {
-        $this->markTestIncomplete();
-    }
 }

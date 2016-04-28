@@ -9,22 +9,9 @@
 
 namespace ZendTest\Di\TestAsset\SetterInjection;
 
-class StaticSetter
+class NoParamsSetter
 {
-    /**
-     * @var string
-     */
-    public static $name = 'originalName';
-
-    /**
-     * @param string $name
-     */
-    public static function setName($name)
-    {
-        self::$name = $name;
-    }
-
-    public function setFoo($foo)
+    public function setFoo()
     {
     }
 }

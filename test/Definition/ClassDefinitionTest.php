@@ -9,7 +9,8 @@
 namespace ZendTest\Di\Definition;
 
 use Zend\Di\Definition\ClassDefinition;
-use Zend\Di\Di;
+use Zend\Di\Definition\DefinitionInterface;
+
 use PHPUnit_Framework_TestCase as TestCase;
 
 class ClassDefinitionTest extends TestCase
@@ -83,6 +84,6 @@ class ClassDefinitionTest extends TestCase
     {
         $definition = new ClassDefinition('Foo');
         $definition->addMethod('__construct');
-        $this->assertEquals(['__construct' => Di::METHOD_IS_CONSTRUCTOR], $definition->getMethods('Foo'));
+        $this->assertEquals(['__construct' => DefinitionInterface::METHOD_IS_CONSTRUCTOR], $definition->getMethods('Foo'));
     }
 }

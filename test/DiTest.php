@@ -10,46 +10,28 @@
 namespace ZendTest\Di;
 
 use ReflectionObject;
+
 use Zend\Di\Config;
 use Zend\Di\Definition;
 use Zend\Di\DefinitionList;
-use Zend\Di\Di;
-use Zend\Di\InstanceManager;
+use Zend\Di\DependencyInjector;
 
-class DiTest extends \PHPUnit_Framework_TestCase
+/**
+ * @coversDefaultClass \Zend\Di\DependencyInjector
+ * @uses \Zend\Di\Config
+ * @uses \Zend\Di\ServiceLocator
+ * @uses \Zend\Di\DefinitionList
+ */
+class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
 {
-    public function testDiHasBuiltInImplementations()
+    /**
+     * @covers ::newInstance()
+     */
+    public function testCreatesObjectWithMatchingClassDefinition()
     {
-        $di = new Di();
-        $this->assertInstanceOf('Zend\Di\InstanceManager', $di->instanceManager());
+        $di = new DependencyInjector();
+        $obj = $di->newInstance('ZendTest\Di\TestAsset\BasicClass');
 
-        $definitions = $di->definitions();
-
-        $this->assertInstanceOf('Zend\Di\DefinitionList', $definitions);
-        $this->assertInstanceOf('Zend\Di\Definition\RuntimeDefinition', $definitions->top());
-    }
-
-    public function testDiConstructorCanTakeDependencies()
-    {
-        $dl = new DefinitionList([]);
-        $im = new InstanceManager();
-        $cg = new Config([]);
-        $di = new Di($dl, $im, $cg);
-
-        $this->assertSame($dl, $di->definitions());
-        $this->assertSame($im, $di->instanceManager());
-
-        $di->setDefinitionList($dl);
-        $di->setInstanceManager($im);
-
-        $this->assertSame($dl, $di->definitions());
-        $this->assertSame($im, $di->instanceManager());
-    }
-
-    public function testGetRetrievesObjectWithMatchingClassDefinition()
-    {
-        $di = new Di();
-        $obj = $di->get('ZendTest\Di\TestAsset\BasicClass');
         $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj);
     }
 
@@ -68,64 +50,6 @@ class DiTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
         $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
         $this->assertSame($obj1, $obj2);
-    }
-
-    public function testGetRetrievesDifferentInstanceOnSubsequentCallsIfSharingDisabled()
-    {
-        $config = new Config([
-            'instance' => [
-                'ZendTest\Di\TestAsset\BasicClass' => [
-                    'shared' => false,
-                ],
-            ],
-        ]);
-        $di = new Di(null, null, $config);
-        $obj1 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $obj2 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
-        $this->assertNotSame($obj1, $obj2);
-    }
-
-    public function testGetRetrievesSameSharedInstanceOnUsingInConstructor()
-    {
-        $config = new Config([
-            'instance' => [
-                'ZendTest\Di\TestAsset\BasicClass' => [
-                    'shared' => true,
-                ],
-            ],
-        ]);
-        $di = new Di(null, null, $config);
-        $obj1 = $di->get('ZendTest\Di\TestAsset\BasicClassWithParent', ['foo' => 0]);
-        $obj2 = $di->get('ZendTest\Di\TestAsset\BasicClassWithParent', ['foo' => 1]);
-        $obj3 = $di->get('ZendTest\Di\TestAsset\BasicClassWithParent', ['foo' => 2, 'non_exists' => 1]);
-        $objParent1 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $objParent2 = $di->get('ZendTest\Di\TestAsset\BasicClass', ['foo' => 1]);
-
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClassWithParent', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClassWithParent', $obj2);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClassWithParent', $obj3);
-        $this->assertSame($obj1->parent, $obj2->parent);
-        $this->assertSame($obj2->parent, $obj3->parent);
-        $this->assertSame($obj3->parent, $objParent1);
-        $this->assertSame($obj3->parent, $objParent2);
-    }
-
-    public function testGetThrowsExceptionWhenUnknownClassIsUsed()
-    {
-        $di = new Di();
-
-        $this->setExpectedException('Zend\Di\Exception\ClassNotFoundException', 'could not be located in');
-        $obj1 = $di->get('ZendTest\Di\TestAsset\NonExistentClass');
-    }
-
-    public function testGetThrowsExceptionWhenMissingParametersAreEncountered()
-    {
-        $di = new Di();
-
-        $this->setExpectedException('Zend\Di\Exception\MissingPropertyException', 'Missing instance/object for ');
-        $obj1 = $di->get('ZendTest\Di\TestAsset\BasicClassWithParam');
     }
 
     public function testNewInstanceReturnsDifferentInstances()
@@ -1023,44 +947,14 @@ class DiTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(['alter'], $returnedAltC->params);
     }
 
-    public function testGetInstanceWithParamsHasSameNameAsDependencyParam()
-    {
-        $config = new Config([
-            'definition' => [
-                'class' => [
-                    TestAsset\AggregateClasses\AggregateItems::class => [
-                        'addItem' => [
-                            'item' => [
-                                'type' => TestAsset\AggregateClasses\ItemInterface::class,
-                                'required' => true,
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-            'instance' => [
-                TestAsset\AggregateClasses\AggregateItems::class => [
-                    'injections' => [
-                        TestAsset\AggregateClasses\Item::class,
-                    ],
-                ],
-                TestAsset\AggregatedParamClass::class => [
-                    'parameters' => [
-                        'item' => TestAsset\AggregateClasses\AggregateItems::class,
-                    ],
-                ],
-            ],
-        ]);
-
-        $di = new Di(null, null, $config);
-        $this->assertCount(1, $di->get(TestAsset\AggregatedParamClass::class)->aggregator->items);
-    }
 
     public function hasInstanceProvider()
     {
-        $config = new Config(['instance' => [
+        $config = new Config(['instances' => [
             TestAsset\BasicClassWithParam::class => [
-                'params' => ['foo' => 'bar'],
+                'injections' => [
+                    '__construct' => ['foo' => 'bar'],
+                ]
             ],
         ]]);
 
@@ -1079,15 +973,11 @@ class DiTest extends \PHPUnit_Framework_TestCase
                 new Definition\RuntimeDefinition(),
         ]);
 
-        $instanceManager = new InstanceManager();
-        $instanceManager->setParameters(TestAsset\ConstructorInjection\X::class, ['one' => 1, 'two' => 2]);
-
         // @codingStandardsIgnoreStart
         return [
-            'no-config'        => [null,            null,             null,    TestAsset\BasicClass::class],
-            'config-instance'  => [null,            null,             $config, TestAsset\BasicClassWithParam::class],
-            'definition-list'  => [$definitionList, null,             null,    TestAsset\CallbackClasses\B::class],
-            'instance-manager' => [null,            $instanceManager, null,    TestAsset\ConstructorInjection\X::class],
+            'no-config'        => [null,            null,    TestAsset\BasicClass::class],
+            'config-instance'  => [null,            $config, TestAsset\BasicClassWithParam::class],
+            'definition-list'  => [$definitionList, null,    TestAsset\CallbackClasses\B::class],
         ];
         // @codingStandardsIgnoreEnd
     }
@@ -1097,68 +987,11 @@ class DiTest extends \PHPUnit_Framework_TestCase
      */
     public function testCanQueryToSeeIfContainerHasOrCanCreateAnInstance(
         $definitionList,
-        $instanceManager,
         $config,
         $testFor
     ) {
-        $di = new Di($definitionList, $instanceManager, $config);
+        $di = new DependencyInjector($config, $definitionList);
         $this->assertTrue($di->has($testFor), sprintf('Failed to find instance for %s', $testFor));
-    }
-
-    /**
-     * test protected method Di::resolveMethodParameters for constructor injection
-     *
-     * @dataProvider providesResolveMethodParameters
-     * @group 4714
-     * @group 6388
-     */
-    public function testResolveMethodParameters($param, $expected)
-    {
-        $config = [
-            'instance' => [
-                'preference' => [
-                    TestAsset\ConstructorInjection\A::class => TestAsset\ConstructorInjection\E::class,
-                ],
-            ],
-        ];
-        $di     = new Di(null, null, new Config($config));
-        $ref    = new ReflectionObject($di);
-        $method = $ref->getMethod('resolveMethodParameters');
-        $method->setAccessible(true);
-
-        //user provides alias name
-        $im = $di->instanceManager();
-        $im->addAlias('foo', TestAsset\ConstructorInjection\F::class, ['params' => ['p' => 'vFoo']]);
-        $im->addAlias('bar', TestAsset\ConstructorInjection\F::class, ['params' => ['p' => 'vBar']]);
-
-        $args = [
-            TestAsset\ConstructorInjection\B::class,
-            '__construct',
-            $param, //without parameters
-            null,
-            Di::METHOD_IS_CONSTRUCTOR,
-            true
-        ];
-        $res = $method->invokeArgs($di, $args);
-        $this->assertInstanceOf($expected, $res[0]);
-    }
-
-    /**
-     *
-     * Provides parameters for protected method Di::resolveMethodParameters
-     *
-     * @group 4714
-     * @group 6388
-     */
-    public function providesResolveMethodParameters()
-    {
-        // @codingStandardsIgnoreStart
-        return [
-            'resolve as type preferenced class @group 6388' => [[],                                               TestAsset\ConstructorInjection\E::class],
-            'resolve class user provided (not E)'           => [['a' => TestAsset\ConstructorInjection\F::class], TestAsset\ConstructorInjection\F::class],
-            'resolve alias class @group 4714'               => [['a' => 'foo'],                                   TestAsset\ConstructorInjection\F::class],
-        ];
-        // @codingStandardsIgnoreEnd
     }
 
     /**
@@ -1169,20 +1002,35 @@ class DiTest extends \PHPUnit_Framework_TestCase
     public function testAliasesWithDiffrentParams()
     {
         $config = [
-            'instance' => [
-                'preference' => [
-                    TestAsset\ConstructorInjection\A::class => TestAsset\ConstructorInjection\E::class,
+            'preferences' => [
+                TestAsset\ConstructorInjection\A::class => TestAsset\ConstructorInjection\E::class,
+            ],
+            'instances' => [
+                'foo' => [
+                    'aliasOf' => TestAsset\ConstructorInjection\F::class,
+                    'injections' => [
+                        '__construct' => [
+                            'params' => ['p' => 'vfoo' ]
+                        ]
+                    ]
                 ],
+                'bar' => [
+                    'aliasOf' => TestAsset\ConstructorInjection\F::class,
+                    'injections' => [
+                        '__construct' => [
+                            'params' => ['p' => 'vbar']
+                        ]
+                    ]
+                ]
             ],
         ];
-        $di = new Di(null, null, new Config($config));
-        $im = $di->instanceManager();
-        $im->addAlias('foo', TestAsset\ConstructorInjection\F::class, ['params' => ['p' => 'vfoo']]);
-        $im->addAlias('bar', TestAsset\ConstructorInjection\F::class, ['params' => ['p' => 'vbar']]);
 
-        $pref = $di->get(TestAsset\ConstructorInjection\B::class);
-        $bFoo = $di->get(TestAsset\ConstructorInjection\B::class, ['a' => 'foo']);
-        $bBar = $di->get(TestAsset\ConstructorInjection\B::class, ['a' => 'bar']);
+        $di = new DependencyInjector(new Config($config));
+
+        $pref = $di->newInstance(TestAsset\ConstructorInjection\B::class);
+        $bFoo = $di->newInstance(TestAsset\ConstructorInjection\B::class, ['a' => 'foo']);
+        $bBar = $di->newInstance(TestAsset\ConstructorInjection\B::class, ['a' => 'bar']);
+
         $this->assertInstanceOf(TestAsset\ConstructorInjection\E::class, $pref->a);
         $this->assertNotSame($pref->a, $bFoo->a);
         $this->assertInstanceOf(TestAsset\ConstructorInjection\F::class, $bFoo->a);

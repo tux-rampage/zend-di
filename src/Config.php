@@ -98,7 +98,7 @@ class Config implements ConfigInterface
      *                                          internally
      * @throws Exception\InvalidArgumentException
      */
-    public function __construct($options)
+    public function __construct($options = [])
     {
         if ($options instanceof Traversable) {
             $options = ArrayUtils::iteratorToArray($options);

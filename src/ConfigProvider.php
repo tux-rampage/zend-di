@@ -34,6 +34,13 @@ class ConfigProvider
      */
     public function getDependencyConfig()
     {
-        return [];
+        return [
+            'factories' => [
+                DependencyInjectionInterface::class => ServiceManager\DependencyInjectorFactory::class,
+            ],
+            'abstractFactories' => [
+                ServiceManager\DependencyInjectedAbstractFactory::class,
+            ]
+        ];
     }
 }

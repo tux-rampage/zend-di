@@ -13,7 +13,6 @@ use Interop\Container\ContainerInterface;
 
 use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
-use Zend\View\Resolver\ResolverInterface;
 
 
 /**

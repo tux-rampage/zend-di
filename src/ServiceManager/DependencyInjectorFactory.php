@@ -11,8 +11,9 @@ namespace Zend\Di\ServiceManager;
 
 use Interop\Container\ContainerInterface;
 
-use Zend\Di\DependencyInjector;
 use Zend\Di\Config;
+use Zend\Di\DefinitionList;
+use Zend\Di\DependencyInjector;
 
 use Zend\ServiceManager\Factory\FactoryInterface;
 
@@ -28,9 +29,11 @@ class DependencyInjectorFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        $configData = ($container->has('Config'))? $container->get('Config') : [];
+        $configData = ($container->has('config'))? $container->get('config') : [];
+        $definitions = $container->has(DefinitionList::class)? $container->get(DefinitionList::class) : null;
+
         $config = new Config(isset($configData['di'])? $configData['di'] : []);
-        $injector = new DependencyInjector($config, null, null, $container);
+        $injector = new DependencyInjector($config, $definitions, null, $container);
 
         return $injector;
     }

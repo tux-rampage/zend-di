@@ -9,7 +9,9 @@
 
 namespace Zend\Di;
 
-
+/**
+ * Interface for defining dependency injectors
+ */
 interface DependencyInjectionInterface
 {
     /**

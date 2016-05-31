@@ -15,6 +15,8 @@ use Zend\Di\Config;
 use Zend\Di\Definition;
 use Zend\Di\DefinitionList;
 use Zend\Di\DependencyInjector;
+use ZendTest\Di\TestAsset\CircularClasses\Y;
+use Zend\Di\Exception\CircularDependencyException;
 
 /**
  * @coversDefaultClass \Zend\Di\DependencyInjector
@@ -371,13 +373,30 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
         $di->newInstance('ZendTest\Di\TestAsset\CircularClasses\D');
     }
 
+    /**
+     * @return DependencyInjector
+     */
     protected function configureNoneCircularDependencyTests()
     {
-        $di = new Di();
-
-        $di->instanceManager()->addAlias('YA', 'ZendTest\Di\TestAsset\CircularClasses\Y');
-        $di->instanceManager()->addAlias('YB', 'ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YA']);
-        $di->instanceManager()->addAlias('YC', 'ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YB']);
+        $di = new DependencyInjector(new Config([
+            'instances' => [
+                'YA' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                ],
+                'YB' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YA'],
+                    ]
+                ],
+                'YC' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YB'],
+                    ]
+                ],
+            ]
+        ]));
 
         return $di;
     }
@@ -420,18 +439,31 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
      */
     public function testCircularDependencyDetectedInAliases()
     {
-        $di = new Di();
+        $di = new DependencyInjector(new Config([
+            'instances' => [
+                'YA' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YC'],
+                    ]
+                ],
+                'YB' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YA'],
+                    ]
+                ],
+                'YC' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YB'],
+                    ]
+                ],
+            ]
+        ]));
 
-        $di->instanceManager()->addAlias('YA', 'ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YC']);
-        $di->instanceManager()->addAlias('YB', 'ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YA']);
-        $di->instanceManager()->addAlias('YC', 'ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YB']);
-
-        $this->setExpectedException(
-            'Zend\Di\Exception\CircularDependencyException',
-            'Circular dependency detected: ZendTest\Di\TestAsset\CircularClasses\Y depends on ZendTest\Di\TestAsset\CircularClasses\Y and viceversa (Aliased as YA)'
-        );
-
-        $yc = $di->get('YC');
+        $this->setExpectedException(CircularDependencyException::class);
+        $di->newInstance('YC');
     }
 
     /**
@@ -442,20 +474,19 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
      */
     public function testCircularDependencyDetectedInSelfReferencingAlias()
     {
-        $di = new Di();
+        $di = new DependencyInjector(new Config([
+            'instances' => [
+                'YA' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                    'injections' => [
+                        '__construct' => ['y' => 'YA']
+                    ]
+                ]
+            ]
+        ]));
 
-        $di->instanceManager()->addAlias(
-            'YA',
-            'ZendTest\Di\TestAsset\CircularClasses\Y',
-            ['y' => 'YA']
-        );
-
-        $this->setExpectedException(
-            'Zend\Di\Exception\CircularDependencyException',
-            'Circular dependency detected: ZendTest\Di\TestAsset\CircularClasses\Y depends on ZendTest\Di\TestAsset\CircularClasses\Y and viceversa (Aliased as YA)'
-        );
-
-        $y = $di->get('YA');
+        $this->setExpectedException(CircularDependencyException::class);
+        $di->get('YA');
     }
 
     /**
@@ -985,13 +1016,13 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
     /**
      * @dataProvider hasInstanceProvider
      */
-    public function testCanQueryToSeeIfContainerHasOrCanCreateAnInstance(
+    public function testCanQueryToSeeIfInjectorHasOrCanCreateAnInstance(
         $definitionList,
         $config,
         $testFor
     ) {
         $di = new DependencyInjector($config, $definitionList);
-        $this->assertTrue($di->has($testFor), sprintf('Failed to find instance for %s', $testFor));
+        $this->assertTrue($di->canInstanciate($testFor), sprintf('Failed to find instance for %s', $testFor));
     }
 
     /**

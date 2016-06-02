@@ -13,10 +13,11 @@ use Interop\Container\ContainerInterface;
 
 
 /**
- * Default service locator implementation using the dependency injector to
- * create instances
+ * Default ioc container implementation
+ *
+ * This is using the dependency injector to create instances
  */
-class ServiceLocator implements ContainerInterface
+class DefaultContainer implements ContainerInterface
 {
     /**
      * Dependency injector
@@ -38,6 +39,9 @@ class ServiceLocator implements ContainerInterface
     public function __construct(DependencyInjectionInterface $di)
     {
         $this->di = $di;
+
+        $this->services[DependencyInjectionInterface::class] = $di;
+        $this->services[ContainerInterface::class] = $this;
     }
 
     /**

@@ -26,9 +26,9 @@ class DependencyInjector implements DependencyInjectionInterface
     protected $definitions = null;
 
     /**
-     * @var ServiceLocatorInterface
+     * @var ContainerInterface
      */
-    protected $serviceLocator = null;
+    protected $container = null;
 
     /**
      * @var DependencyResolverInterface
@@ -72,28 +72,30 @@ class DependencyInjector implements DependencyInjectionInterface
         $this->config = $config? : new Config();
         $this->resolver = $resolver? : new DependencyResolver($this->definitions, $this->config);
         $this->delayedInjections = new \SplQueue();
-        $this->setServiceLocator($serviceLocator? : new ServiceLocator($this));
+        $this->setContainer($serviceLocator? : new DefaultContainer($this));
 
         $this->delayedInjections->setIteratorMode(\SplDoublyLinkedList::IT_MODE_DELETE);
     }
 
     /**
-     * Set the service locator
+     * Set the ioc container
      *
-     * @param  ContainerInterface $serviceLocator
+     * Sets the ioc container to utilize for fetching instances of dependencies
+     *
+     * @param  ContainerInterface $container
      * @return self
      */
-    public function setServiceLocator(ContainerInterface $serviceLocator)
+    public function setContainer(ContainerInterface $container)
     {
-        if ($serviceLocator instanceof DependencyInjectionAwareInterface) {
-            $serviceLocator->setDependencyInjector($this);
+        if ($container instanceof DependencyInjectionAwareInterface) {
+            $container->setDependencyInjector($this);
         }
 
         if ($this->resolver) {
-            $this->resolver->setServiceLocator($serviceLocator);
+            $this->resolver->setContainer($container);
         }
 
-        $this->serviceLocator = $serviceLocator;
+        $this->container = $container;
         return $this;
     }
 
@@ -138,14 +140,14 @@ class DependencyInjector implements DependencyInjectionInterface
      * Forces retrieval of a discrete instance of the given class, using the optionally provided
      * constructor parameters.
      *
-     * @param  mixed                            $name                   Class name or service alias
-     * @param  array                            $parameters             Constructor paramters
-     * @param  bool                             $injectAllDependencies  Set to false to only inject construction dependencis
+     * @param  mixed                            $name               Class name or service alias
+     * @param  array                            $parameters         Constructor paramters
+     * @param  bool                             $setterInjection    Set to true to enforce setter injection for the requested type
      * @return object|null
      * @throws Exception\ClassNotFoundException
      * @throws Exception\RuntimeException
      */
-    public function newInstance($name, array $parameters = [], $injectAllDependencies = true)
+    public function newInstance($name, array $parameters = [], $setterInjection = false)
     {
         // localize dependencies
         $definitions = $this->definitions;
@@ -178,7 +180,7 @@ class DependencyInjector implements DependencyInjectionInterface
         $this->currentInstances[$name] = $instance;
         array_pop($this->instanceContext);
 
-        if ($injectAllDependencies) {
+        if ($setterInjection) {
             $this->doInjectDependencies($instance, $class, $name, count($this->instanceContext));
         }
 
@@ -313,6 +315,7 @@ class DependencyInjector implements DependencyInjectionInterface
      * @param  string      $instanciator
      * @param  array       $params
      * @param  string|null $class
+     * @throws Exception\InvalidCallbackException
      * @return object
      */
     protected function createInstance($name, $instanciator, $params, $class = null)
@@ -339,6 +342,10 @@ class DependencyInjector implements DependencyInjectionInterface
         }
 
         if ($instanciator !== '__construct') {
+            if (!is_callable([$class, $instanciator])) {
+                throw new Exception\InvalidCallbackException(sprintf('The instanciator "%s" is not callable on the requested class "%s"'), $instanciator, $class);
+            }
+
             return call_user_func_array([$class, $instanciator], $callParameters);
         }
 
@@ -371,7 +378,7 @@ class DependencyInjector implements DependencyInjectionInterface
      */
     protected function resolveMethodParameters($type, $method, array $params = [], $required = false)
     {
-        $container = $this->serviceLocator;
+        $container = $this->container;
         $resolved = $this->resolver->resolveMethodParameters($type, $method, $params);
         $params = [];
 

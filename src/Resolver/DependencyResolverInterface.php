@@ -36,12 +36,12 @@ interface DependencyResolverInterface
     const MODE_STRICT = 1;
 
     /**
-     * Set the service locator to utilize
+     * Set the ioc container
      *
-     * @param  ContainerInterface $serviceLocator  Service locator instance
-     * @return self Should provide a fluent interface
+     * @param   ContainerInterface  $container  The ioc container to utilize for checking for instances
+     * @return  self                            Should provide a fluent interface
      */
-    public function setServiceLocator(ContainerInterface $serviceLocator);
+    public function setContainer(ContainerInterface $container);
 
     /**
      * Resolve a type prefernece

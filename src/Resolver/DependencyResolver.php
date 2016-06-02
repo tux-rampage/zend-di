@@ -34,7 +34,7 @@ class DependencyResolver implements DependencyResolverInterface
     /**
      * @var ContainerInterface
      */
-    protected $serviceLocator = null;
+    protected $container = null;
 
     /**
      * The resolver mode
@@ -72,12 +72,24 @@ class DependencyResolver implements DependencyResolverInterface
     protected function getConfiguredInjections($requestedType, $method)
     {
         // Are there any injections defined?
-        $injections = $this->config->getInjections($requestedType, $method);
+        $config = $this->config;
+        $injections = $config->getInjections($requestedType, $method);
+        $isAlias = $config->isAlias($requestedType);
+        $class = $isAlias? $config->getClassForAlias($method) : null;
 
-        if (empty($injections) && $this->config->isAlias($requestedType)) {
-            $class = $this->config->getClassForAlias($requestedType);
+        if (empty($injections) && $isAlias) {
+            $injections = $config->getInjections($class, $method);
+        }
 
-            return $this->config->getInjections($class, $method);
+        // Include the parameters for resolving the instanciator parameters
+        if ($this->definition->getInstantiator($requestedType) == $method) {
+            $params = $config->getParameters($requestedType);
+
+            if (empty($params) && $isAlias) {
+                $params = $config->getParameters($class);
+            }
+
+            $injections = array_merge($injections, $params);
         }
 
         return $injections;
@@ -154,11 +166,11 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
-     * @see \Zend\Di\Resolver\DependencyResolverInterface::setServiceLocator()
+     * @see \Zend\Di\Resolver\DependencyResolverInterface::setContainer()
      */
-    public function setServiceLocator(ContainerInterface $serviceLocator)
+    public function setContainer(ContainerInterface $container)
     {
-        $this->serviceLocator = $serviceLocator;
+        $this->container = $container;
         return $this;
     }
 
@@ -176,6 +188,7 @@ class DependencyResolver implements DependencyResolverInterface
         // Case configuration enforces a type injection
         if ($value instanceof TypeInjection) {
             if (!$this->isTypeOf($value->getType(), $requiredType)) {
+                // ... but the type does not match the requirement
                 return null;
             }
 
@@ -207,7 +220,7 @@ class DependencyResolver implements DependencyResolverInterface
      * {@inheritDoc}
      * @see \Zend\Di\Resolver\DependencyResolverInterface::resolveMethodParameters()
      */
-    public function resolveMethodParameters($requestedType, $method)
+    public function resolveMethodParameters($requestedType, $method, array $callTimeParameters = [])
     {
         $injections = $this->getConfiguredInjections($requestedType, $method);
         $class = $requestedType;
@@ -246,8 +259,8 @@ class DependencyResolver implements DependencyResolverInterface
 
             // There is a directly provided injection - This should only apply to instanciators
             // No attempt is made to resolve anything it's taken as it is
-            if (isset($params[$name])) {
-                $result[$name] = new ValueInjection($params[$name]);
+            if (isset($callTimeParameters[$name])) {
+                $result[$name] = new ValueInjection($callTimeParameters[$name]);
                 continue;
             }
 
@@ -261,13 +274,14 @@ class DependencyResolver implements DependencyResolverInterface
             if ($type && !$this->isInternalType($type)) {
                 $preference = $this->resolvePreference($type, $requestedType);
 
-                if ($preference && ($this->serviceLocator->has($preference))) {
+                if ($preference && $this->container && $this->container->has($preference)) {
                     $result[$name] = $preference;
                     continue;
                 }
 
-                if ($this->serviceLocator->has($type)) {
+                if ($this->container && $this->container->has($type)) {
                     $result[$name] = $type;
+                    continue;
                 }
             }
 
@@ -296,7 +310,7 @@ class DependencyResolver implements DependencyResolverInterface
         $preferences = array_merge($preferences, $this->config->getTypePreferences($dependencyType));
 
         foreach ($preferences as $preference) {
-            if ($this->isTypeOf($preference, $dependencyType) && $this->serviceLocator->has($preference)) {
+            if ($this->isTypeOf($preference, $dependencyType) && $this->container && $this->container->has($preference)) {
                 return $preference;
             }
         }

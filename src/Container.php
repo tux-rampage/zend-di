@@ -11,12 +11,12 @@ namespace Zend\Di;
 
 
 /**
- * A stand alone container implementation
+ * A stand alone ioc container implementation
  *
  * This is intentionally compatible to the ServiceManager's ServiceLocatorInterface. It's just not implementing it
  * to not introduce a non-dev dependency to the ServiceManager component
  */
-class Container extends ServiceLocator
+class Container extends DefaultContainer
 {
     /**
      * {@inheritDoc}

@@ -37,17 +37,14 @@ interface DependencyInjectionInterface
     public function canInstanciate($name);
 
     /**
-     * Retrieve a new instance of a class
-     *
-     * Forces retrieval of a discrete instance of the given class.
+     * Create a new instance of a class or alias
      *
      * @param  mixed   $name                   Class name or service alias
      * @param  array   $options                Parameters used for instanciation
-     * @param  bool    $injectAllDependencies  Automatically inject non-instanciator dependencies as well (methods, properties).
      * @return object  The resulting instace
      * @throws Exception\ExceptionInterface When an error occours during instanciation
      */
-    public function newInstance($name, array $options = [], $injectAllDependencies = true);
+    public function newInstance($name, array $options = []);
 
     /**
      * Inject non-constructor dependencies to the given instance

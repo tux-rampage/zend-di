@@ -152,6 +152,21 @@ class Config implements ConfigInterface
     }
 
     /**
+     * Returns the instanciation paramters for the given type
+     *
+     * @param   string  $type   The alias or class name
+     * @return  array           The configured parameters
+     */
+    public function getParameters($type)
+    {
+        if (!isset($this->data['instances'][$type]['parameters']) || !is_array($this->data['instances'][$type]['parameters'])) {
+            return [];
+        }
+
+        return $this->data['instances'][$type]['parameters'];
+    }
+
+    /**
      * {@inheritDoc}
      * @see \Zend\Di\ConfigInterface::getTypePreferences()
      */

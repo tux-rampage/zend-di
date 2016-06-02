@@ -29,6 +29,14 @@ interface ConfigInterface
     public function getClassForAlias($name);
 
     /**
+     * Returns the instanciation paramters for the given type
+     *
+     * @param   string  $type   The alias or class name
+     * @return  array           The configured parameters
+     */
+    public function getParameters($type);
+
+    /**
      * Returns the injections for a specific method
      *
      * The renurned array contains the parameter name as key

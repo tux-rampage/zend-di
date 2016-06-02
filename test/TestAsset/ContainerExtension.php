@@ -9,9 +9,9 @@
 
 namespace ZendTest\Di\TestAsset;
 
-use Zend\Di\ServiceLocator;
+use Zend\Di\DefaultContainer;
 
-class ContainerExtension extends ServiceLocator
+class ContainerExtension extends DefaultContainer
 {
     public $foo;
     public $params;

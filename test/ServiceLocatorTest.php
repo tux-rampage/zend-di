@@ -9,7 +9,7 @@
 
 namespace ZendTest\Di;
 
-use Zend\Di\ServiceLocator;
+use Zend\Di\DefaultContainer;
 use Zend\Di\DependencyInjectionInterface;
 
 use PHPUnit_Framework_TestCase as TestCase;
@@ -39,7 +39,7 @@ class ServiceLocatorTest extends TestCase
     protected function setUp()
     {
         $this->diMock = $this->getMockForAbstractClass(DependencyInjectionInterface::class);
-        $this->services = new ServiceLocator($this->diMock);
+        $this->services = new DefaultContainer($this->diMock);
     }
 
     public function testRetrievingWillUseDiInstance()

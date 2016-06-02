@@ -9,19 +9,17 @@
 
 namespace ZendTest\Di;
 
-use ReflectionObject;
-
 use Zend\Di\Config;
 use Zend\Di\Definition;
 use Zend\Di\DefinitionList;
 use Zend\Di\DependencyInjector;
-use ZendTest\Di\TestAsset\CircularClasses\Y;
+
 use Zend\Di\Exception\CircularDependencyException;
 
 /**
  * @coversDefaultClass \Zend\Di\DependencyInjector
  * @uses \Zend\Di\Config
- * @uses \Zend\Di\ServiceLocator
+ * @uses \Zend\Di\DefaultContainer
  * @uses \Zend\Di\DefinitionList
  */
 class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
@@ -497,20 +495,18 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
      */
     public function testCircularDependencyDetectedInMixtureOfAliasesAndClasses()
     {
-        $di = new Di();
+        $di = new DependencyInjector(new Config([
+            'instances' => [
+                'YA' => [
+                    'aliasOf' => 'ZendTest\Di\TestAsset\CircularClasses\Y',
+                ],
+                'parameters' => ['y' => 'ZendTest\Di\TestAsset\CircularClasses\Y'],
+            ]
+        ]));
 
-        $di->instanceManager()->addAlias(
-            'YA',
-            'ZendTest\Di\TestAsset\CircularClasses\Y',
-            ['y' => 'ZendTest\Di\TestAsset\CircularClasses\Y']
-        );
 
-        $this->setExpectedException(
-            'Zend\Di\Exception\CircularDependencyException',
-            'Circular dependency detected: ZendTest\Di\TestAsset\CircularClasses\Y depends on ZendTest\Di\TestAsset\CircularClasses\Y and viceversa (Aliased as YA)'
-        );
-
-        $y = $di->get('ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YA']);
+        $this->setExpectedException('Zend\Di\Exception\CircularDependencyException');
+        $di->newInstance('ZendTest\Di\TestAsset\CircularClasses\Y', ['y' => 'YA']);
     }
 
     /**
@@ -808,22 +804,6 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('ZendTest\Di\TestAsset\SetterInjection\A', $b->a);
     }
 
-    public function testDiWillInjectDependenciesForAlias()
-    {
-        $di = new Di;
-
-        // for setter injection, the dependency is not required, thus it must be forced
-        $classDef = new Definition\ClassDefinition('ZendTest\Di\TestAsset\SetterInjection\B');
-        $classDef->addMethod('setA', false);
-        $classDef->addMethodParameter('setA', 'a', ['type' => 'ZendTest\Di\TestAsset\SetterInjection\A', 'required' => false]);
-        $di->definitions()->addDefinition($classDef, false);
-        $di->instanceManager()->addAlias('b_alias', 'ZendTest\Di\TestAsset\SetterInjection\B');
-        $di->instanceManager()->setInjections('b_alias', ['ZendTest\Di\TestAsset\SetterInjection\A']);
-
-        $b = $di->get('b_alias');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\SetterInjection\A', $b->a);
-    }
-
     /*
      * @group SetterInjection
      * @group SupertypeResolution
@@ -849,26 +829,6 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * @group ZF2-260
-     */
-    public function testDiWillInjectClassNameAsStringAtCallTime()
-    {
-        $di = new Di;
-
-        $classDef = new Definition\ClassDefinition('ZendTest\Di\TestAsset\SetterInjection\D');
-        $classDef->addMethod('setA', true);
-        $classDef->addMethodParameter('setA', 'a', ['type' => false, 'required' => true]);
-        $di->definitions()->addDefinition($classDef, false);
-
-        $d = $di->get(
-            'ZendTest\Di\TestAsset\SetterInjection\D',
-            ['a' => 'ZendTest\Di\TestAsset\SetterInjection\A']
-        );
-
-        $this->assertSame($d->a, 'ZendTest\Di\TestAsset\SetterInjection\A');
-    }
-
-    /**
      * @group ZF2-308
      */
     public function testWillNotCallStaticInjectionMethods()
@@ -885,8 +845,6 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
      */
     public function testDiWillInjectDefaultParameters()
     {
-        $di = new Di;
-
         $classDef = new Definition\ClassDefinition('ZendTest\Di\TestAsset\ConstructorInjection\OptionalParameters');
         $classDef->addMethod('__construct', true);
         $classDef->addMethodParameter(
@@ -905,7 +863,8 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
             ['type' => false, 'required' => false, 'default' => []]
         );
 
-        $di->definitions()->addDefinition($classDef, false);
+        $di = new DependencyInjector(null, new DefinitionList([$classDef]));
+
 
         $optionalParams = $di->newInstance('ZendTest\Di\TestAsset\ConstructorInjection\OptionalParameters');
 

@@ -37,13 +37,6 @@ class DependencyResolver implements DependencyResolverInterface
     protected $container = null;
 
     /**
-     * The resolver mode
-     *
-     * @var int
-     */
-    protected $mode = self::MODE_STRICT;
-
-    /**
      * @var string[]
      */
     protected $internalTypes = [
@@ -150,22 +143,6 @@ class DependencyResolver implements DependencyResolverInterface
     }
 
     /**
-     * Set the resolver mode.
-     *
-     * Changes the resolver mode to strict or eager.
-     *
-     * See the `MODE_*` constants for details.
-     *
-     * @param  int  $mode   The new resolver mode
-     * @return self
-     */
-    public function setMode($mode)
-    {
-        $this->mode = (int)$mode;
-        return $this;
-    }
-
-    /**
      * @see \Zend\Di\Resolver\DependencyResolverInterface::setContainer()
      */
     public function setContainer(ContainerInterface $container)
@@ -250,6 +227,7 @@ class DependencyResolver implements DependencyResolverInterface
 
         $params = $this->definition->getMethodParameters($class, $method);
         $methodRequirement = $this->definition->getMethodRequirementType($class, $method);
+        $mode = $this->definition->getResolverMode($class);
 
         foreach ($params as $paramInfo) {
             $name = $paramInfo->name;
@@ -285,9 +263,9 @@ class DependencyResolver implements DependencyResolverInterface
                 }
             }
 
-            // The parameter is required, but we can't find anything that ist suitable
+            // The parameter is required, but we can't find anything that is suitable
             if ($isRequired) {
-                if (($methodRequirement & $this->mode) != 0) {
+                if (($methodRequirement & $mode) != 0) {
                     throw new MissingPropertyException(sprintf('Could not resolve value for ', $class, $method, $name));
                 }
 
@@ -310,7 +288,7 @@ class DependencyResolver implements DependencyResolverInterface
         $preferences = array_merge($preferences, $this->config->getTypePreferences($dependencyType));
 
         foreach ($preferences as $preference) {
-            if ($this->isTypeOf($preference, $dependencyType) && $this->container && $this->container->has($preference)) {
+            if ($this->isTypeOf($preference, $dependencyType) && (!$this->container || $this->container->has($preference))) {
                 return $preference;
             }
         }

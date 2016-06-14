@@ -71,6 +71,7 @@ class DefaultStrategy implements StrategyInterface
 
         $parser->registerAnnotation(new Annotation\Inject());
         $parser->registerAnnotation(new Annotation\Instantiator());
+        $parser->registerAnnotation(new Annotation\Mode());
 
         $annotationManager->attach($parser);
 

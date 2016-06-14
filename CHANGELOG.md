@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file, in reverse 
 - `InstanceManager` in favour of `Interop\Container\ContainerInterface`
 - `Zend\Di\Di` is removed in favour of `Zend\Di\Container`
 - Separated the definition from the configuration.
+- Removed auto wiring for setter methods. Only configured setter injections will be performed.
 
 ### Fixed
 

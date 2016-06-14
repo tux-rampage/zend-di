@@ -9,22 +9,41 @@
 
 namespace Zend\Di\Definition;
 
+/**
+ * Interface for class definitions
+ */
 interface DefinitionInterface
 {
+    /**
+     * Require as many things as possible
+     *
+     * Depends on the definition, this will cause the resolver to fail
+     * on dependencies that are marked as eager as well
+     */
+    const RESOLVE_EAGER = 2;
+
+    /**
+     * Only essentially required methods
+     *
+     * This will cause the resolver to only fail on methods marked as
+     * Required.
+     */
+    const RESOLVE_STRICT = 1;
+
     /**
      * The method is completely optional and may be omitted if no dependencies can be provided
      */
     const METHOD_IS_OPTIONAL = 0;
 
     /**
-     * Marks the method as requirement in both modes (MODE_EAGER and MODE_STRICT)
+     * Marks the method as requirement in both modes: `self::MODE_EAGER | self::MODE_STRICT`
      */
-    const METHOD_IS_REQUIRED = 3;
+    const METHOD_IS_REQUIRED = 3; // self::MODE_EAGER | self::MODE_STRICT
 
     /**
      * Marks a method as requirement in resolver mode MODE_EAGER
      */
-    const METHOD_IS_EAGER = 1;
+    const METHOD_IS_EAGER = 2;
 
     /**
      * The method is a constructor
@@ -58,6 +77,14 @@ interface DefinitionInterface
      * @return string[]
      */
     public function getClassSupertypes($class);
+
+    /**
+     * Returns the class specific resolver mode
+     *
+     * @param string $class
+     * @return int
+     */
+    public function getResolverMode($class);
 
     /**
      * Returns the instanciator for the class

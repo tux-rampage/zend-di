@@ -398,6 +398,36 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
     /**
      * {@inheritDoc}
+     * @see \Zend\Di\Definition\DefinitionInterface::getResolverMode()
+     */
+    public function getResolverMode($class)
+    {
+        if (false === ($classDefinition = $this->getDefinitionForClass($class))) {
+            return self::RESOLVE_STRICT;
+        }
+
+        $mode = $classDefinition->getResolverMode($class);
+
+        if (!$classDefinition instanceof Definition\PartialMarker) {
+            return $mode;
+        }
+
+        /** @var $definition Definition\DefinitionInterface */
+        foreach ($this as $definition) {
+            if ($definition === $classDefinition) {
+                continue;
+            }
+
+            if ($definition->hasClass($class) && (!$definition instanceof Definition\PartialMarker)) {
+                return $definition->getResolverMode($class);
+            }
+        }
+
+        return $mode;
+    }
+
+    /**
+     * {@inheritDoc}
      * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
      */
     public function getMethodRequirementType($class, $method)

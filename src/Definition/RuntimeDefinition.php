@@ -248,13 +248,17 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
             $def['instantiator'] = '__construct';
         }
 
-        // Check for constructor
-        if ($rClass->hasMethod('__construct')) {
-            $def['methods']['__construct'] = self::METHOD_IS_CONSTRUCTOR; // required
-            $this->processParams($def, $rClass, $rClass->getMethod('__construct'));
-        }
-
         $useAnnotations = $strategy->getUseAnnotations(); // localize for performannce
+
+        if ($useAnnotations) {
+            foreach ($rClass->getAnnotations($strategy->getAnnotationManager()) as $classAnnotation) {
+                if ($classAnnotation instanceof Annotation\Mode) {
+                    $def['resolverMode'] = $classAnnotation->mode;
+                    break;
+                }
+            }
+
+        }
 
         foreach ($rClass->getMethods(Reflection\MethodReflection::IS_PUBLIC) as $rMethod) {
             $methodName = $rMethod->getName();
@@ -276,6 +280,12 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
                 $this->processParams($def, $rClass, $rMethod);
 
                 continue;
+            }
+
+            // Check for constructor
+            if ($rMethod->getName() == '__construct') {
+                $def['methods']['__construct'] = self::METHOD_IS_CONSTRUCTOR; // required
+                $this->processParams($def, $rClass, $rMethod);
             }
 
             // Adding injection methods without parameters is quite useless (means nothing to inject)

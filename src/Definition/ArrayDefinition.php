@@ -125,6 +125,19 @@ class ArrayDefinition implements DefinitionInterface
 
     /**
      * {@inheritDoc}
+     * @see \Zend\Di\Definition\DefinitionInterface::getResolverMode()
+     */
+    public function getResolverMode($class)
+    {
+        if (!isset($this->definition[$class]['resolverMode'])) {
+            return self::RESOLVE_STRICT;
+        }
+
+        return $this->definition[$class]['resolverMode'];
+    }
+
+    /**
+     * {@inheritDoc}
      * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
      */
     public function getMethodRequirementType($class, $method)

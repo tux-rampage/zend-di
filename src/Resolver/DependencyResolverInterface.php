@@ -20,22 +20,6 @@ use Interop\Container\ContainerInterface;
 interface DependencyResolverInterface
 {
     /**
-     * Require as many things as possible
-     *
-     * Depends on the definition, this will cause the resolver to fail
-     * on dependencies that are marked as eager as well
-     */
-    const MODE_EAGER = 2;
-
-    /**
-     * Only essentially required methods
-     *
-     * This will cause the resolver to only fail on methods marked as
-     * Required.
-     */
-    const MODE_STRICT = 1;
-
-    /**
      * Set the ioc container
      *
      * @param   ContainerInterface  $container  The ioc container to utilize for checking for instances
@@ -46,9 +30,9 @@ interface DependencyResolverInterface
     /**
      * Resolve a type prefernece
      *
-     * @param string  $dependencyType  The type/class name of the dependency to resolve the preference for
-     * @param string  $requestedType   The typename of the instance that is created or in which the dependency should be injected
-     * @return string Returns the preferred type name
+     * @param   string  $dependencyType The type/class name of the dependency to resolve the preference for
+     * @param   string  $requestedType  The typename of the instance that is created or in which the dependency should be injected
+     * @return  string                  Returns the preferred type name or null if there is no preference
      */
     public function resolvePreference($dependencyType, $requestedType = null);
 

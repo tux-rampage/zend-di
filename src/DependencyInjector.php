@@ -48,16 +48,14 @@ class DependencyInjector implements DependencyInjectionInterface
     protected $currentInstances = [];
 
     /**
-     * @var string
+     * @var string[]
      */
-    protected $instanceContext = [];
+    protected $instanciationStack = [];
 
     /**
-     * Secondary method injections that are allowed to omit
-     *
-     * @var \SplQueue
+     * @var string[]
      */
-    protected $delayedInjections;
+    protected $canInstanciateStack = [];
 
     /**
      * Constructor
@@ -66,15 +64,13 @@ class DependencyInjector implements DependencyInjectionInterface
      * @param null|InstanceManager $instanceManager
      * @param null|Config   $config
      */
-    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $serviceLocator = null)
+    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $container = null)
     {
         $this->definitions = $definitions? : new DefinitionList(new Definition\RuntimeDefinition());
         $this->config = $config? : new Config();
         $this->resolver = $resolver? : new DependencyResolver($this->definitions, $this->config);
-        $this->delayedInjections = new \SplQueue();
-        $this->setContainer($serviceLocator? : new DefaultContainer($this));
 
-        $this->delayedInjections->setIteratorMode(\SplDoublyLinkedList::IT_MODE_DELETE);
+        $this->setContainer($container? : new DefaultContainer($this));
     }
 
     /**
@@ -102,12 +98,9 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Returns the class name for the requested type
      *
-     * This abstraction allows to exchange the requested class name with a proxy class
-     *
-     * @todo  Implement subscriber support
      * @param string $type
      */
-    protected function getClassName($type)
+    private function getClassName($type)
     {
         if ($this->config->isAlias($type)) {
             return $this->config->getClassForAlias($type);
@@ -117,7 +110,21 @@ class DependencyInjector implements DependencyInjectionInterface
     }
 
     /**
+     * Returns the actual instanciation class name
+     *
+     * @todo Implement subscriber subscribers
+     * @param string $class
+     * @return string
+     */
+    private function mapInstanciateClassName($class)
+    {
+        return $class;
+    }
+
+    /**
      * Check if the given type name can be instanciated
+     *
+     * This will be the case if the name points to a class.
      *
      * @param  string $name
      * @return bool
@@ -131,7 +138,7 @@ class DependencyInjector implements DependencyInjectionInterface
             $class = $this->config->getClassForAlias($name);
         }
 
-        return class_exists($class);
+        return (class_exists($class) && !interface_exists($class));
     }
 
     /**
@@ -142,49 +149,37 @@ class DependencyInjector implements DependencyInjectionInterface
      *
      * @param  mixed                            $name               Class name or service alias
      * @param  array                            $parameters         Constructor paramters
-     * @param  bool                             $setterInjection    Set to true to enforce setter injection for the requested type
      * @return object|null
      * @throws Exception\ClassNotFoundException
      * @throws Exception\RuntimeException
      */
-    public function newInstance($name, array $parameters = [], $setterInjection = false)
+    public function newInstance($name, array $parameters = [])
     {
-        // localize dependencies
-        $definitions = $this->definitions;
-        $class = $this->getClassName($name);
-
         // Minimize cycle failures
-        if ($this->currentInstances[$name] && !count($this->instanceContext)) {
+        if ($this->currentInstances[$name] && count($this->instanciationStack)) {
             return $this->currentInstances[$name];
         }
 
-        array_push($this->instanceContext, ['NEW', $class, $name]);
-
-        if (!$definitions->hasClass($class)) {
-            $aliasMsg = ($name != $class) ? ' (specified by alias ' . $name . ')' : '';
-            throw new Exception\ClassNotFoundException(
-                'Class ' . $class . $aliasMsg . ' could not be located in provided definitions.'
-            );
+        if (in_array($name, $this->instanciationStack)) {
+            throw new Exception\CircularDependencyException(sprintf('Circular dependency: %s -> %s', implode(' -> ', $this->instanciationStack), $name));
         }
 
-        $instantiator     = $definitions->getInstantiator($class);
+        $this->instanciationStack[] = $name;
 
         try {
-            $instance = $this->createInstance($name, $instantiator, $parameters, $class);
+            $instance = $this->createInstance($name, $parameters);
+            $this->currentInstances[$name] = $instance;
+
+            $this->doInjectDependencies($instance, $name);
         } catch (Exception\ExceptionInterface $e) {
-            $this->instanceContext = [];
+            $this->instanciationStack = [];
             $this->currentInstances = [];
             throw $e;
         }
 
-        $this->currentInstances[$name] = $instance;
-        array_pop($this->instanceContext);
+        array_pop($this->instanciationStack);
 
-        if ($setterInjection) {
-            $this->doInjectDependencies($instance, $class, $name, count($this->instanceContext));
-        }
-
-        if (!count($this->instanceContext)) {
+        if (!count($this->instanciationStack)) {
             $this->currentInstances = [];
         }
 
@@ -200,40 +195,22 @@ class DependencyInjector implements DependencyInjectionInterface
      */
     public function injectDependencies($instance, $type = null)
     {
-        $class = get_class($instance);
         if (!$type) {
-            $type = $class;
+            $type = get_class($instance);
         }
 
-        $this->doInjectDependencies($instance, $class, $type);
-    }
-
-    /**
-     * Inject dependencies that could not be resolved during the new instance process
-     */
-    protected function injectDelayedDependencies()
-    {
-        foreach ($this->delayedInjections as $args) {
-            list($instance, $method, $instanceClass, $instanceType) = $args;
-            $this->resolveAndCallInjectionMethodForInstance($instance, $method, $instanceClass, $instanceType);
-        }
-
-        return $this;
+        $this->doInjectDependencies($instance, $type);
     }
 
     /**
      * Perform injections into the given instance
      *
      * @param  object $instance     The instance to inject the dependencies to
-     * @param  string $class        The class name of this instance
      * @param  string $type         The typename to use for resolving the dependencies
-     * @param  bool   $allowDelay   Flag if the injections for methods that fail to resolve are allowed to be delayed (within nested newInstance calls)
      * @return self
      */
-    protected function doInjectDependencies($instance, $class, $type, $allowDelay = false)
+    protected function doInjectDependencies($instance, $type)
     {
-        array_push($this->instanceContext, ['INJECT', $class, $type]);
-
         $class = $this->getClassName($type);
         $definitions = $this->definitions;
         $visitedMethods = [];
@@ -242,41 +219,12 @@ class DependencyInjector implements DependencyInjectionInterface
             $visitedMethods[] = $instanciator;
         }
 
-        foreach ($definitions->getMethods($type) as $method) {
-            if (in_array($method, $visitedMethods)) {
-                continue;
-            }
-
-            if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
-                $this->delayedInjections->push([$instance, $method, $class, $type]);
-            }
-
-            $visitedMethods[] = $method;
-        }
-
-        foreach ($definitions->getClassSupertypes($class) as $superType) {
-            foreach ($definitions->getMethods($superType) as $method) {
-                if (in_array($method, $visitedMethods)) {
-                    continue;
-                }
-
-                if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
-                    $this->delayedInjections->push([$instance, $method, $class, $type]);
-                }
-
-                $visitedMethods[] = $method;
-            }
-        }
-
         foreach ($this->config->getAllInjectionMethods($type) as $method) {
             if (in_array($method, $visitedMethods)) {
                 continue;
             }
 
-            if (!$this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type) && $allowDelay) {
-                $this->delayedInjections->push([$instance, $method, $class, $type]);
-            }
-
+            $this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type);
             $visitedMethods[] = $method;
         }
     }
@@ -290,9 +238,9 @@ class DependencyInjector implements DependencyInjectionInterface
      * @param  string|null                  $instanceType
      * @throws Exception\RuntimeException
      */
-    protected function resolveAndCallInjectionMethodForInstance($instance, $method, $instanceClass, $instanceType)
+    private function resolveAndCallInjectionMethodForInstance($instance, $method, $instanceClass, $instanceType)
     {
-        $params = $this->resolveMethodParameters($instanceType, $method, [], self::METHOD_IS_OPTIONAL);
+        $params = $this->resolveMethodParameters($instanceType, $method);
 
         if ($params == null) {
             return false;
@@ -309,19 +257,29 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Retrieve a class instance based on class name
      *
-     * Any parameters provided will be used as constructor arguments.
+     * Any parameters provided will be used as constructor/instanciator arguments only.
      *
-     * @param  string      $class
-     * @param  string      $instanciator
-     * @param  array       $params
-     * @param  string|null $class
-     * @throws Exception\InvalidCallbackException
-     * @return object
+     * @param   string  $name   The type name to instanciate
+     * @param   array   $params Constructor/instanciator arguments
+     * @return  object
+     *
+     * @throws  Exception\InvalidCallbackException
+     * @throws  Exception\ClassNotFoundException
      */
-    protected function createInstance($name, $instanciator, $params, $class = null)
+    protected function createInstance($name, $params)
     {
-        $callParameters = $params;
-        $class = $class? : $name;
+        // localize dependencies
+        $definitions = $this->definitions;
+        $class = $this->getClassName($name);
+
+        if (!$definitions->hasClass($class)) {
+            $aliasMsg = ($name != $class) ? ' (specified by alias ' . $name . ')' : '';
+            throw new Exception\ClassNotFoundException('Class ' . $class . $aliasMsg . ' could not be located in provided definitions.');
+        }
+
+        $instanciator = $definitions->getInstantiator($class);
+        $callParameters = [];
+        $class = $this->mapInstanciateClassName($class? : $name);
 
         if (!class_exists($class)) {
             throw new Exception\ClassNotFoundException(sprintf(
@@ -338,7 +296,7 @@ class DependencyInjector implements DependencyInjectionInterface
         }
 
         if ($this->definitions->hasMethod($class, $instanciator)) {
-            $callParameters = $this->resolveMethodParameters($name, $instanciator, $params, true);
+            $callParameters = $this->resolveMethodParameters($name, $instanciator, $params);
         }
 
         if ($instanciator !== '__construct') {
@@ -366,42 +324,54 @@ class DependencyInjector implements DependencyInjectionInterface
     }
 
     /**
-     * Resolve parameters referencing other services
+     * Resolve parameters
      *
-     * @param  string                                $type      The class or alias name
+     * At first this method utilizes the resolver to obtain the types to inject.
+     * If this was successful (the resolver returned a non-null value), it will use
+     * the ioc container to fetch the instances
+     *
+     * @param  string                                $type      The class or alias name to resolve for
      * @param  string                                $method    The method name to resolve
      * @param  array                                 $params    Provided call time parameters
      * @param  bool                                  $required  Override resolver requirements
-     * @throws Exception\MissingPropertyException
-     * @throws Exception\CircularDependencyException
-     * @return array|null
+     * @throws Exception\UndefinedReferenceException            When a type cannot be obtained via the ioc container and the method is required for injection
+     * @throws Exception\CircularDependencyException            When a circular dependency is detected
+     * @return array|null                                       The resulting arguments in call order or null if nothing could be obtained
      */
-    protected function resolveMethodParameters($type, $method, array $params = [], $required = false)
+    private function resolveMethodParameters($type, $method, array $params = [])
     {
         $container = $this->container;
         $resolved = $this->resolver->resolveMethodParameters($type, $method, $params);
         $params = [];
 
         if ($resolved === null) {
-            if ($required) {
-                throw new Exception\MissingPropertyException('Could not resolve required parameters for ' . $type . '::' . $method);
-            }
-
             return null;
         }
+
+        $class = $this->getClassName($type);
+        $mode = $this->definitions->getResolverMode($class);
+        $requirement = $this->definitions->getMethodRequirementType($class, $method);
+        $isRequired = (($mode & $requirement) != 0);
 
         foreach ($resolved as $position => $arg) {
             if ($arg instanceof Resolver\ValueInjection) {
                 $params[] = $arg->getValue();
                 continue;
+            } else if ($arg === null) {
+                $params[] = null;
+                continue;
             }
 
-            if (($arg === null) || !$container->has($arg)) {
-                if ($required) {
-                    throw new Exception\MissingPropertyException('Missing property for parameter ' . $position . ' of method ' . $type . '::' . $method);
+            if ($arg instanceof Resolver\TypeInjection) {
+                $arg = $arg->getType();
+            }
+
+            if (!$container->has($arg)) {
+                if (!$isRequired) {
+                    return null;
                 }
 
-                return null;
+                throw new Exception\UndefinedReferenceException('Could not obtain instance ' . $arg . ' from ioc container for parameter ' . $position . ' of method ' . $type . '::' . $method);
             }
 
             $params[] = $container->get($arg);

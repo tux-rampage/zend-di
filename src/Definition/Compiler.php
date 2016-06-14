@@ -10,12 +10,10 @@
 namespace Zend\Di\Definition;
 
 use Zend\Di\Exception\RuntimeException;
-
 use Zend\Code\Scanner\AggregateDirectoryScanner;
-use Zend\Code\Scanner\DerivedClassScanner;
 use Zend\Code\Scanner\DirectoryScanner;
 use Zend\Code\Scanner\FileScanner;
-
+use Zend\Di\Definition\Introspection\StrategyInterface as IntrospectionStrategyInterface;
 use Zend\Stdlib\ErrorHandler;
 
 /**
@@ -50,9 +48,9 @@ class Compiler
     /**
      * Constructor
      *
-     * @param IntrospectionStrategy $introspectionStrategy
+     * @param IntrospectionStrategyInterface $introspectionStrategy
      */
-    public function __construct(IntrospectionStrategy $introspectionStrategy = null)
+    public function __construct(IntrospectionStrategyInterface $introspectionStrategy = null)
     {
         $this->definition = new RuntimeDefinition($introspectionStrategy);
         $this->directoryScanner = new AggregateDirectoryScanner();
@@ -61,9 +59,9 @@ class Compiler
     /**
      * Set introspection strategy
      *
-     * @param IntrospectionStrategy $introspectionStrategy
+     * @param IntrospectionStrategyInterface $introspectionStrategy
      */
-    public function setIntrospectionStrategy(IntrospectionStrategy $introspectionStrategy)
+    public function setIntrospectionStrategy(IntrospectionStrategyInterface $introspectionStrategy)
     {
         $this->definition->setIntrospectionStrategy($introspectionStrategy);
     }

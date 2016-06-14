@@ -214,15 +214,7 @@ class DependencyResolver implements DependencyResolverInterface
 
         // This method is not known - take the injections as literal
         if (!$this->definition->hasMethod($class, $method)) {
-            foreach ($injections as $injection) {
-                if ($injection instanceof TypeInjection) {
-                    $result[] = $injection->getType();
-                } else {
-                    $result[] = new ValueInjection($injection);
-                }
-            }
-
-            return $result;
+            return null;
         }
 
         $params = $this->definition->getMethodParameters($class, $method);

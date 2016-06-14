@@ -96,6 +96,36 @@ class DependencyInjector implements DependencyInjectionInterface
     }
 
     /**
+     * Returns the definition list
+     *
+     * @return \Zend\Di\DefinitionList
+     */
+    public function getDefinitions()
+    {
+        return $this->definitions;
+    }
+
+    /**
+     * Returns the resolver
+     *
+     * @return \Zend\Di\Resolver\DependencyResolverInterface
+     */
+    public function getResolver()
+    {
+        return $this->resolver;
+    }
+
+    /**
+     * Returns the configuration
+     *
+     * @return \Zend\Di\ConfigInterface
+     */
+    public function getConfig()
+    {
+        return $this->config;
+    }
+
+    /**
      * Returns the class name for the requested type
      *
      * @param string $type
@@ -233,7 +263,7 @@ class DependencyInjector implements DependencyInjectionInterface
      * Resolves dependencies for the the method by using the instance type and injects them into the provided instance
      *
      * @param  object                       $instance
-     * @param  array                        $method
+     * @param  string                       $method
      * @param  string|null                  $instanceClass
      * @param  string|null                  $instanceType
      * @throws Exception\RuntimeException

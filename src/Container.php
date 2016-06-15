@@ -27,7 +27,7 @@ class Container extends DefaultContainer
         if (!$di) {
             $di = new DependencyInjector(null, null, null, $this);
         } else {
-            $di->setServiceLocator($this);
+            $di->setContainer($this);
         }
 
         parent::__construct($di);

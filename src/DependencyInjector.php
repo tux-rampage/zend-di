@@ -13,6 +13,8 @@ use Interop\Container\ContainerInterface;
 
 use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
+use Zend\Di\Definition\DefinitionInterface;
+use Zend\Di\Definition\RuntimeDefinition;
 
 
 /**
@@ -60,13 +62,17 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Constructor
      *
-     * @param null|DefinitionList  $definitions
-     * @param null|InstanceManager $instanceManager
-     * @param null|Config   $config
+     * @param null|DefinitionInterface  $definitions
+     * @param null|InstanceManager      $instanceManager
+     * @param null|Config               $config
      */
-    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $container = null)
+    public function __construct(ConfigInterface $config = null, DefinitionInterface $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $container = null)
     {
-        $this->definitions = $definitions? : new DefinitionList(new Definition\RuntimeDefinition());
+        if (!$definitions instanceof DefinitionList) {
+            $definitions = new DefinitionList($definitions? : new Definition\RuntimeDefinition());
+        }
+
+        $this->definitions = $definitions;
         $this->config = $config? : new Config();
         $this->resolver = $resolver? : new DependencyResolver($this->definitions, $this->config);
 
@@ -83,10 +89,6 @@ class DependencyInjector implements DependencyInjectionInterface
      */
     public function setContainer(ContainerInterface $container)
     {
-        if ($container instanceof DependencyInjectionAwareInterface) {
-            $container->setDependencyInjector($this);
-        }
-
         if ($this->resolver) {
             $this->resolver->setContainer($container);
         }

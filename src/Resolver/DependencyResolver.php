@@ -244,12 +244,12 @@ class DependencyResolver implements DependencyResolverInterface
             if ($type && !$this->isInternalType($type)) {
                 $preference = $this->resolvePreference($type, $requestedType);
 
-                if ($preference && $this->container && $this->container->has($preference)) {
+                if ($preference && (!$this->container || $this->container->has($preference))) {
                     $result[$name] = $preference;
                     continue;
                 }
 
-                if ($this->container && $this->container->has($type)) {
+                if (!$this->container || $this->container->has($type)) {
                     $result[$name] = $type;
                     continue;
                 }

@@ -29,7 +29,7 @@ class TypeInjection
      *
      * @param string $type
      */
-    public function __class($type)
+    public function __construct($type)
     {
         $this->type = (string)$type;
     }

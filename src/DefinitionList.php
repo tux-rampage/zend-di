@@ -17,6 +17,8 @@ use Zend\Di\Definition\DefinitionInterface;
  * Class definition based on multiple definitions
  *
  * The class definitions are stored in a FIFO list
+ *
+ * TODO: Create an interface for definition aggregations and move this class to the Definition namespace
  */
 class DefinitionList extends SplDoublyLinkedList implements Definition\DefinitionInterface
 {

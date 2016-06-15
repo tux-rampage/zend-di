@@ -27,7 +27,7 @@ class ValueInjection
     /**
      * @param mixed $value
      */
-    public function __class($value)
+    public function __construct($value)
     {
         $this->value = $value;
     }

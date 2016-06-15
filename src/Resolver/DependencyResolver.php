@@ -219,7 +219,7 @@ class DependencyResolver implements DependencyResolverInterface
 
         $params = $this->definition->getMethodParameters($class, $method);
         $methodRequirement = $this->definition->getMethodRequirementType($class, $method);
-        $mode = $this->definition->getResolverMode($class);
+        $mode = $this->config->getResolverMode($requestedType);
 
         foreach ($params as $paramInfo) {
             $name = $paramInfo->name;

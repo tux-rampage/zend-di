@@ -14,6 +14,7 @@ use Zend\Di\ConfigInterface;
 use Zend\Di\DependencyInjector;
 use Zend\Di\DefinitionList;
 use Zend\Di\Resolver\DependencyResolverInterface;
+use Zend\Di\Exception\RuntimeException;
 
 
 /**
@@ -53,9 +54,14 @@ abstract class AbstractDependencyInjector extends DependencyInjector
             return $this->factories[$type];
         }
 
-        $class = $this->factories[$type];
-        $factory = new $class($this->container);
+        $file = $this->factories[$type];
+        $class = include_once __DIR__ . '/' . $file;
 
+        if (!$class) {
+            throw new RuntimeException('Failed to load generated factory for ' . $type);
+        }
+
+        $factory = new $class($this->container);
         $this->setFactory($type, $factory);
 
         return $factory;

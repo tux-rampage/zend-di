@@ -15,20 +15,6 @@ namespace Zend\Di;
 interface DependencyInjectionInterface
 {
     /**
-     * Resolve method policy
-     *
-     * EAGER: explore type preference or go through
-     */
-    const RESOLVE_EAGER = 1;
-
-    /**
-     * Resolve method policy
-     *
-     * STRICT: explore type preference or throw exception
-     */
-    const RESOLVE_STRICT = 2;
-
-    /**
      * Check if this dependency injector can handle the given class
      *
      * @param   string $name

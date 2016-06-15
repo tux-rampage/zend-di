@@ -11,6 +11,7 @@ namespace Zend\Di;
 
 use Traversable;
 use Zend\Stdlib\ArrayUtils;
+use Zend\Di\Resolver\DependencyResolverInterface;
 
 /**
  * Provides a DI configuration from an array
@@ -34,6 +35,14 @@ use Zend\Stdlib\ArrayUtils;
  *     // Types may also be purely virtual by defining the aliasOf key.
  *     'instances' => [
  *         My\Class::class => [
+ *              // Enable or disable eager resolver mode for this type
+ *              // The default is disabled
+ *              'eager' => false,
+ *
+ *              // Enable or disable strict resolver mode for this type
+ *              // The default is disabled
+ *              'strict' => false,
+ *
  *              'preferences' => [
  *                  // this superseds the global type preferences
  *                  // when My\Class is instanciated
@@ -136,6 +145,25 @@ class Config implements ConfigInterface
         }
 
         return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Zend\Di\ConfigInterface::getResolverMode()
+     */
+    public function getResolverMode($type)
+    {
+        $mode = DependencyResolverInterface::RESOLVE_ESSENTIAL;
+
+        if (isset($this->data['instances'][$type]['eager']) && $this->data['instances'][$type]['eager']) {
+            $mode = $mode | DependencyResolverInterface::RESOLVE_EAGER;
+        }
+
+        if (isset($this->data['instances'][$type]['strict'])) {
+            $mode = $mode | DependencyResolverInterface::RESOLVE_STRICT;
+        }
+
+        return $mode;
     }
 
     /**

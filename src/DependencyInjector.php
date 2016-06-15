@@ -23,6 +23,11 @@ use Zend\Di\Definition\RuntimeDefinition;
 class DependencyInjector implements DependencyInjectionInterface
 {
     /**
+     * Matches eager resolving
+     */
+    const MODE_IS_EAGER = 4;
+
+    /**
      * @var DefinitionList
      */
     protected $definitions = null;
@@ -252,6 +257,20 @@ class DependencyInjector implements DependencyInjectionInterface
         }
 
         foreach ($this->config->getAllInjectionMethods($type) as $method) {
+            if (in_array($method, $visitedMethods)) {
+                continue;
+            }
+
+            $this->resolveAndCallInjectionMethodForInstance($instance, $method, $class, $type);
+            $visitedMethods[] = $method;
+        }
+
+        // Only auto wire definitions in eager mode
+        if (0 == ($this->config->getResolverMode($type) & self::MODE_IS_EAGER)) {
+            return;
+        }
+
+        foreach ($this->definitions->getMethods($class) as $method) {
             if (in_array($method, $visitedMethods)) {
                 continue;
             }

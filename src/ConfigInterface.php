@@ -29,6 +29,17 @@ interface ConfigInterface
     public function getClassForAlias($name);
 
     /**
+     * Returns the type specific resolver mode
+     *
+     * See the `RESOLVE_*` constants in the `DependencyResolverInterface` for available modes.
+     * All modes can be combined with `|`
+     *
+     * @param   string  $type   The type name
+     * @return  int             The configures resolver mode for $type
+     */
+    public function getResolverMode($type);
+
+    /**
      * Returns the instanciation paramters for the given type
      *
      * @param   string  $type   The alias or class name

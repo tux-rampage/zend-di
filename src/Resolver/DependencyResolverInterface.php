@@ -20,6 +20,30 @@ use Interop\Container\ContainerInterface;
 interface DependencyResolverInterface
 {
     /**
+     * Resolver Policy: Require as many things as possible
+     *
+     * This will cause the resolver to auto-wire all eager
+     * dependencies known by the definition.
+     */
+    const RESOLVE_EAGER = 5;
+
+    /**
+     * Resolver Policy: Fail on  required missing dependencies
+     *
+     * This will cause the resolver to fail on non-essential
+     * (eager) dependencies as well.
+     */
+    const RESOLVE_STRICT = 3;
+
+    /**
+     * Resolver Policy: Only essentially required injections
+     *
+     * This will cause the resolver to only fail on methods marked as
+     * Required.
+     */
+    const RESOLVE_ESSENTIAL = 1;
+
+    /**
      * Set the ioc container
      *
      * @param   ContainerInterface  $container  The ioc container to utilize for checking for instances

@@ -37,7 +37,7 @@ class ConfigProvider
         return [
             'factories' => [
                 DependencyInjectionInterface::class => ServiceManager\DependencyInjectorFactory::class,
-                DefinitionList::class => ServiceManager\DefinitionListFactory::class,
+                Definition\DefinitionInterface::class => ServiceManager\DefinitionListFactory::class,
             ],
             'abstractFactories' => [
                 ServiceManager\DependencyInjectedAbstractFactory::class,

@@ -12,10 +12,12 @@ namespace Zend\Di\CodeGenerator;
 use Interop\Container\ContainerInterface;
 use Zend\Di\ConfigInterface;
 use Zend\Di\DependencyInjector;
-use Zend\Di\DefinitionList;
-use Zend\Di\Resolver\DependencyResolverInterface;
+use Zend\Di\Definition\DefinitionList;
+use Zend\Di\Definition\DefinitionInterface;
+use Zend\Di\Definition\RuntimeDefinition;
 use Zend\Di\Exception\RuntimeException;
-
+use Zend\Di\Generated\Definition as GeneratedDefinition;
+use Zend\Di\Resolver\DependencyResolverInterface;
 
 /**
  * Abstract class for code generated dependency injectors
@@ -31,9 +33,19 @@ abstract class AbstractDependencyInjector extends DependencyInjector
      * {@inheritDoc}
      * @see \Zend\Di\DependencyInjector::__construct()
      */
-    public function __construct(ConfigInterface $config = null, DefinitionList $definitions = null, DependencyResolverInterface $resolver = null, ContainerInterface $container = null)
+    public function __construct(ConfigInterface $config = null, DefinitionInterface $definition = null, DependencyResolverInterface $resolver = null, ContainerInterface $container = null)
     {
-        parent::__construct($config, $definitions, $resolver, $container);
+        if (!$definition) {
+            $definition = new DefinitionList();
+
+            if (class_exists(GeneratedDefintion::class)) {
+                $definition->addDefinition(new GeneratedDefintion(), false);
+            }
+
+            $definition->addDefinition(new RuntimeDefinition());
+        }
+
+        parent::__construct($config, $definition, $resolver, $container);
         $this->factories = $this->getFactoryList();
     }
 

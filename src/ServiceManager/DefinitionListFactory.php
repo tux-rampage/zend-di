@@ -10,13 +10,11 @@
 namespace Zend\Di\ServiceManager;
 
 use Interop\Container\ContainerInterface;
-
-use Zend\Di\DefinitionList;
-
+use Zend\Di\Definition\DefinitionList;
 use Zend\Di\Definition\ArrayDefinition;
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\Definition\RuntimeDefinition;
-
+use Zend\Di\Generated\Definition as GeneratedDefinition;
 use Zend\ServiceManager\Factory\FactoryInterface;
 
 
@@ -119,6 +117,10 @@ class DefinitionListFactory implements FactoryInterface
         $this->addArrayDefintions($list, $definitionConfig);
         $this->addCustomDefinitions($list, $container, $options);
         $this->addCustomDefinitions($list, $container, $definitionConfig);
+
+        if (class_exists(GeneratedDefinition::class)) {
+            $list->addDefinition(new GeneratedDefinition());
+        }
 
         $list->addDefinition(new RuntimeDefinition());
 

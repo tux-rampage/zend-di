@@ -15,6 +15,7 @@ use Zend\Di\Resolver\DependencyResolver;
 use Zend\Di\Resolver\DependencyResolverInterface;
 use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\Definition\RuntimeDefinition;
+use Zend\Di\Definition\DefinitionList;
 
 
 /**
@@ -105,7 +106,7 @@ class DependencyInjector implements DependencyInjectionInterface
     /**
      * Returns the definition list
      *
-     * @return \Zend\Di\DefinitionList
+     * @return \Zend\Di\Definition\AggregatedDefinitionInterface
      */
     public function getDefinitions()
     {

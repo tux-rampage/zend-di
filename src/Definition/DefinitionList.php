@@ -7,20 +7,16 @@
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace Zend\Di;
+namespace Zend\Di\Definition;
 
 use SplDoublyLinkedList;
-use Zend\Di\Definition\RuntimeDefinition;
-use Zend\Di\Definition\DefinitionInterface;
 
 /**
  * Class definition based on multiple definitions
  *
  * The class definitions are stored in a FIFO list
- *
- * TODO: Create an interface for definition aggregations and move this class to the Definition namespace
  */
-class DefinitionList extends SplDoublyLinkedList implements Definition\DefinitionInterface
+class DefinitionList extends SplDoublyLinkedList implements AggregatedDefinitionInterface
 {
     /**
      * An internal hash of class names to responsible defintions
@@ -39,7 +35,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
     /**
      * Creates a new definition list
      *
-     * @param Definition\DefinitionInterface|Definition\DefinitionInterface[] $definitions  The initial definitions
+     * @param DefinitionInterface|DefinitionInterface[] $definitions  The initial definitions
      */
     public function __construct($definitions = [])
     {
@@ -57,11 +53,11 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
     /**
      * Add a definition
      *
-     * @param  Definition\DefinitionInterface $definition
-     * @param  bool                           $addToBackOfList
+     * @param  DefinitionInterface  $definition
+     * @param  bool                 $addToBackOfList
      * @return void
      */
-    public function addDefinition(Definition\DefinitionInterface $definition, $addToBackOfList = true)
+    public function addDefinition(DefinitionInterface $definition, $addToBackOfList = true)
     {
         if ($addToBackOfList) {
             $this->push($definition);
@@ -73,10 +69,10 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
     /**
      * Builds a hash of class names pointing to the given definition
      *
-     * @param Definition\DefinitionInterface $definition
-     * @return Definition\DefinitionInterface[string]       The resulting class name hash
+     * @param   DefinitionInterface         $definition The definition to build from
+     * @return  DefinitionInterface[string]             The resulting class name hash
      */
-    protected function getDefinitionClassMap(Definition\DefinitionInterface $definition)
+    protected function getDefinitionClassMap(DefinitionInterface $definition)
     {
         $definitionClasses = $definition->getClasses();
         if (empty($definitionClasses)) {
@@ -90,7 +86,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
      * Adds a defintion to the top of the list
      *
      * @see SplDoublyLinkedList::unshift()
-     * @param Definition\DefinitionInterface $definition;
+     * @param DefinitionInterface $definition;
      */
     public function unshift($definition)
     {
@@ -125,7 +121,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
      * which also includes instances of classes inheriting from this type.
      *
      * @param  string                           $type   The defintion class name
-     * @return Definition\DefinitionInterface[]         The resulting definitions
+     * @return DefinitionInterface[]         The resulting definitions
      */
     public function getDefinitionsByType($type)
     {
@@ -145,7 +141,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
      * Retruns the first definition that is an instance of the given type
      *
      * @param  string                         $type
-     * @return Definition\DefinitionInterface
+     * @return DefinitionInterface
      */
     public function getDefinitionByType($type)
     {
@@ -202,7 +198,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
         if (array_key_exists($class, $this->classes)) {
             return true;
         }
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this->runtimeDefinitions as $definition) {
             if ($definition->hasClass($class)) {
                 return true;
@@ -225,11 +221,11 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
         $supertypes = $classDefinition->getClassSupertypes($class);
 
-        if (!$classDefinition instanceof Definition\PartialMarker) {
+        if (!$classDefinition instanceof PartialMarker) {
             return $supertypes;
         }
 
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if (($definition === $classDefinition) || !$definition->hasClass($class)) {
                 continue;
@@ -237,7 +233,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
             $supertypes = array_merge($supertypes, $definition->getClassSupertypes($class));
 
-            if (!$definition instanceof Definition\PartialMarker) {
+            if (!$definition instanceof PartialMarker) {
                 return $supertypes;
             }
         }
@@ -258,11 +254,11 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
         $value = $classDefinition->getInstantiator($class);
 
-        if (($value !== null) || !($classDefinition instanceof Definition\PartialMarker)) {
+        if (($value !== null) || !($classDefinition instanceof PartialMarker)) {
             return $value;
         }
 
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if (($definition === $classDefinition) || !$definition->hasClass($class)) {
                 continue;
@@ -270,7 +266,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
             $value = $definition->getInstantiator($class);
 
-            if (($value !== null) || !($definition instanceof Definition\PartialMarker)) {
+            if (($value !== null) || !($definition instanceof PartialMarker)) {
                 return $value;
             }
         }
@@ -288,16 +284,16 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
         if (false !== ($methods = $classDefinition->hasMethods($class))) {
             return $methods;
         }
-        if (! $classDefinition instanceof Definition\PartialMarker) {
+        if (! $classDefinition instanceof PartialMarker) {
             return false;
         }
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if ($definition === $classDefinition) {
                 continue;
             }
             if ($definition->hasClass($class)) {
-                if ($definition->hasMethods($class) === false && $definition instanceof Definition\PartialMarker) {
+                if ($definition->hasMethods($class) === false && $definition instanceof PartialMarker) {
                     continue;
                 }
 
@@ -320,7 +316,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
         if ($classDefinition->hasMethod($class, $method)) {
             return true;
         }
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this->runtimeDefinitions as $definition) {
             if ($definition === $classDefinition) {
                 continue;
@@ -342,16 +338,16 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
             return [];
         }
         $methods = $classDefinition->getMethods($class);
-        if (! $classDefinition instanceof Definition\PartialMarker) {
+        if (! $classDefinition instanceof PartialMarker) {
             return $methods;
         }
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if ($definition === $classDefinition) {
                 continue;
             }
             if ($definition->hasClass($class)) {
-                if (!$definition instanceof Definition\PartialMarker) {
+                if (!$definition instanceof PartialMarker) {
                     return array_merge($definition->getMethods($class), $methods);
                 }
 
@@ -382,7 +378,7 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
         if ($classDefinition->hasMethod($class, $method) && $classDefinition->hasMethodParameters($class, $method)) {
             return $classDefinition->getMethodParameters($class, $method);
         }
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if ($definition === $classDefinition) {
                 continue;
@@ -410,17 +406,17 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
         $mode = $classDefinition->getResolverMode($class);
 
-        if (!$classDefinition instanceof Definition\PartialMarker) {
+        if (!$classDefinition instanceof PartialMarker) {
             return $mode;
         }
 
-        /** @var $definition Definition\DefinitionInterface */
+        /** @var $definition DefinitionInterface */
         foreach ($this as $definition) {
             if ($definition === $classDefinition) {
                 continue;
             }
 
-            if ($definition->hasClass($class) && (!$definition instanceof Definition\PartialMarker)) {
+            if ($definition->hasClass($class) && (!$definition instanceof PartialMarker)) {
                 return $definition->getResolverMode($class);
             }
         }
@@ -441,9 +437,9 @@ class DefinitionList extends SplDoublyLinkedList implements Definition\Definitio
 
         $requirement = $classDefinition->getMethodRequirementType($class, $method);
 
-        if ($classDefinition instanceof Definition\PartialMarker) {
+        if ($classDefinition instanceof PartialMarker) {
             foreach ($this as $definition) {
-                if ((!$definition instanceof Definition\PartialMarker)
+                if ((!$definition instanceof PartialMarker)
                     && $definition->hasClass($class) && $definition->hasMethod($class, $method)) {
                     return $definition->getMethodRequirementType($class, $method);
                 }

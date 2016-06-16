@@ -20,10 +20,18 @@ use Zend\Di\Definition\DefinitionInterface;
 use Zend\Di\Resolver\DependencyResolverInterface;
 use Zend\Di\Resolver\ValueInjection;
 use Zend\Di\Resolver\TypeInjection;
-use Zend\Di\Exception\RuntimeException;
+use Zend\Di\Exception\GenerateCodeException;
 
 /**
  * Generator for the depenendency injector
+ *
+ * Generates a DependencyInjector class that will use a generated factory for
+ * a requested type, if available. This factory will contained pre-resolved
+ * dependencies from the provided configuration, definition and resolver instances.
+ *
+ * The generated factories are considered private to the generated dependency injector
+ * and are not intented to be used or referenced outside of this class. Therefore they are
+ * not designed to be autoloadable.
  */
 class DependencyInjectorGenerator
 {
@@ -84,12 +92,13 @@ class DependencyInjectorGenerator
     /**
      * Builds the code for method parameters
      *
-     * @param   string  $type   The type name to build for
-     * @param   string  $method The method name
-     * @return  array|null      An array containing the param list and the code segment or null if
-     *                          The method was optional but not resolvable
+     * @param   string  $type           The type name to build for
+     * @param   string  $method         The method name
+     * @param   bool    $acceptParams   True if the generated method accepts params
+     * @return  array|null              An array containing the param list and the code segment or null if
+     *                                  The method was optional but not resolvable
      */
-    private function buildMethodParametersCode($type, $method)
+    private function buildMethodParametersCode($type, $method, $acceptParams = false)
     {
         $class = $this->getClassName($type);
         $params = $this->resolver->resolveMethodParameters($type, $method);
@@ -111,8 +120,13 @@ class DependencyInjectorGenerator
             $injection = array_shift($params);
 
             if ($injection instanceof ValueInjection) {
+                // A value should be injected - this is only possible to generate
+                // if this value is exportable
+
                 if (!$injection->isExportable()) {
-                    throw new RuntimeException(sprintf(
+                    // There is a configured injection the contains an unexportable type (i.e. a resource)
+                    // This can not be represented as php code - therefore the whoe method should not be generated
+                    throw new GenerateCodeException(sprintf(
                         'Value injection for parameter %s in %s::%s() is not exportable (Requested type %s)',
                         $param->name, $class, $method, $type
                     ));
@@ -120,12 +134,17 @@ class DependencyInjectorGenerator
 
                 $code = $injection->export();
             } else {
+                // Everything else is considered a type injection
+                // We'll use the ioc container
+
                 if ($injection instanceof TypeInjection) {
                     $injection = $injection->getType();
                 }
 
                 if ($type == '') {
-                    throw new RuntimeException(sprintf(
+                    // Somehow the resolver returned an empty type which is not wrapped in a ValueInjection
+                    // A bug in the resolver? Anyhow this is not acceptable and the factory cannot be created
+                    throw new GenerateCodeException(sprintf(
                         'Resolved injection for parameter %s in %s::%s() resulted in an empty type (Requested type %s)',
                         $param->name, $class, $method, $type
                     ));
@@ -134,16 +153,29 @@ class DependencyInjectorGenerator
                 $code = '$this->container->get(' . var_export((string)$type) . ')';
             }
 
+            // build for two cases:
+            // 1. Parameters are passed at call time
+            // 2. No Parameters were passed at call time (might be slightly faster)
+            // TODO: Would array_key_exists be a better alternative than isset to force a null value?
             $names[] = $arg;
             $args['u'][] = sprintf('%s = %s;', $arg, $code);
-            $args['c'][] = sprintf('%1$s = isset($params[%3$s])? $params[%3$s] : %2$s;', $arg, $code, $param->name);
+            $args['c'][] = sprintf('%1$s = array_key_exists(%3$s, $params)? $params[%3$s] : %2$s;', $arg, $code, var_export((string)$param->name));
         }
 
         if ($counter > 0) {
-            $code = 'if (count($params)) {' . "\n"
-                  . $tab . implode("\n$tab", $args['c']) . "\n"
-                  . '} else {' . "\n"
-                  . $tab . implode("\n$tab", $args['u']) . "\n}\n\n";
+            if ($acceptParams) {
+                // Build conditional initializer code:
+                // If no $params were provided ignore it completely
+                // otherwise check if there is a value for each dependency in $params.
+                $code = 'if (empty($params)) {' . "\n"
+                      . $tab . implode("\n$tab", $args['c']) . "\n"
+                      . '} else {' . "\n"
+                      . $tab . implode("\n$tab", $args['u']) . "\n}\n\n";
+            } else {
+                // The method does not accept a $params array
+                // Just build the initialzer code
+                implode("\n", $args['u']) . "\n\n";
+            }
         }
 
         return [ $names, $code ];
@@ -157,12 +189,15 @@ class DependencyInjectorGenerator
     {
         $class = $this->getClassName($type);
         $instanciator = $this->definition->getInstantiator($class)? : '__construct';
-        $paramsCode = $this->buildMethodParametersCode($type, $instanciator);
+        $paramsCode = $this->buildMethodParametersCode($type, $instanciator, true);
 
+        // The resolver was unable to deliver and somehow the instanciator
+        // was not considered a requirement. Whatever caused this, it's not acceptable here
         if (!$paramsCode) {
-            throw new RuntimeException(sprintf('Failed to resolve instanciator paramters of type %s', $type));
+            throw new GenerateCodeException(sprintf('Failed to resolve instanciator parameters of type %s', $type));
         }
 
+        // Decide if new or static method call should be used
         $absoluteClassName = '\\' . $class;
         $invokeCode = sprintf(
             ($instanciator != '__construct')? '%s::%s(%s)' : 'new %1$s(%3$s)',
@@ -189,6 +224,8 @@ class DependencyInjectorGenerator
     {
         $paramsCode = $this->buildMethodParametersCode($type, $method);
 
+        // The resolver could not provide the deps and considered the
+        // injection as optional - so just skip this method
         if (!$paramsCode) {
             return null;
         }
@@ -232,8 +269,14 @@ class DependencyInjectorGenerator
     }
 
     /**
-     * @param string $type
-     * @return string|bool
+     * Attempts to generate a factory for the given type
+     *
+     * This may fail with exceptions if not all required dependencies could be resolved
+     * or the configuration contains values that are not code generatable
+     *
+     * @param   string  $type   The type name (class or alias) to generate the factory for
+     * @return  string          The resulting factory file name (without path)
+     * @throws  \Exception      When the factory cannot be generated
      */
     private function generateTypeFactory($type)
     {

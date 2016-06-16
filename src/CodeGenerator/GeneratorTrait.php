@@ -10,7 +10,7 @@
 namespace Zend\Di\CodeGenerator;
 
 use Zend\Di\Exception\LogicException;
-use Zend\Di\Exception\RuntimeException;
+use Zend\Di\Exception\GenerateCodeException;
 
 /**
  * Trait with generic generator utility methods
@@ -33,12 +33,12 @@ trait GeneratorTrait
      * This will check the path at $dir if it exsits and if it is a directory
      *
      * @param   string  $dir
-     * @throws  RuntimeException
+     * @throws  GenerateCodeException
      */
     protected function ensureDirectory($dir)
     {
         if (!is_dir($this->outputDirectory) && !mkdir($this->outputDirectory, $this->mode, true)) {
-            throw new RuntimeException('Could not create output directory: ' . $this->outputDirectory);
+            throw new GenerateCodeException('Could not create output directory: ' . $this->outputDirectory);
         }
     }
 
@@ -46,6 +46,7 @@ trait GeneratorTrait
      * Ensures the existence of the output directory
      *
      * @throws LogicException
+     * @throws GenerateCodeException
      */
     protected function ensureOutputDirectory()
     {

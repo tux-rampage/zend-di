@@ -9,7 +9,11 @@
 
 namespace Zend\Di;
 
-
+/**
+ * Provides the instance and resolver configuration
+ *
+ * @api
+ */
 interface ConfigInterface
 {
     /**
@@ -40,10 +44,11 @@ interface ConfigInterface
     public function getResolverMode($type);
 
     /**
-     * Returns the instanciation paramters for the given type
+     * Returns the instanciation parameters for the given type
      *
+     * @see     getInjections() The injections provider method
      * @param   string  $type   The alias or class name
-     * @return  array           The configured parameters
+     * @return  array           The configured parameters in the same format as resturned by `getInjections()`
      */
     public function getParameters($type);
 
@@ -52,10 +57,9 @@ interface ConfigInterface
      *
      * The renurned array contains the parameter name as key
      * and the injection as value. If this value is "*", the type preferences should be used.
-     * String values will be used as type name if the method parameter is typehintet to a class or an interface
+     * String values will be used as type name if the method parameter is typehinted to a class or an interface
      *
-     * TODO: Should this also support positional paramter configs?
-     *
+     * @todo Should this also support positional paramter configs?
      * @param  string $type
      * @param  string $method
      * @return array

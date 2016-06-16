@@ -42,6 +42,8 @@ class DefaultContainer implements ContainerInterface
 
         $this->services[DependencyInjectionInterface::class] = $di;
         $this->services[ContainerInterface::class] = $this;
+        $this->services[get_class($di)] = $di;
+        $this->services[get_class($this)] = $this;
     }
 
     /**

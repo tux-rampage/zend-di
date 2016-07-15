@@ -11,9 +11,7 @@ namespace ZendTest\Di;
 
 use Zend\Di\Config;
 use Zend\Di\Definition;
-use Zend\Di\DefinitionList;
 use Zend\Di\DependencyInjector;
-
 use Zend\Di\Exception\CircularDependencyException;
 
 /**
@@ -25,6 +23,50 @@ use Zend\Di\Exception\CircularDependencyException;
 class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
 {
     /**
+     * @covers ::canInstanciate
+     */
+    public function testCanInstanciateẂorksForExistingClass()
+    {
+        $di = new DependencyInjector();
+        $this->assertTrue($di->canInstanciate(TestAsset\BasicClass::class));
+    }
+
+    /**
+     * @covers ::canInstanciate
+     */
+    public function testCanInstanciateFailsForNonExitingClass()
+    {
+        $di = new DependencyInjector();
+        $this->assertFalse($di->canInstanciate('No\Such\ClassFoo'));
+    }
+
+    /**
+     * @covers ::canInstanciate
+     */
+    public function testCanInstanciateFailsForInterfaces()
+    {
+        $di = new DependencyInjector();
+        $this->assertFalse($di->canInstanciate(TestAsset\DummyInterface::class));
+    }
+
+    /**
+     * @covers ::canInstanciate
+     */
+    public function testCanInstanciateWorksWithAliases()
+    {
+        $di = new DependencyInjector(new Config([
+            'instances' => [
+                'FooAlias' => [
+                    'aliasOf' => TestAsset\BasicClass::class
+                ]
+            ]
+        ]));
+
+        $this->assertTrue($di->canInstanciate('FooAlias'));
+    }
+
+
+    /**
      * @covers ::newInstance()
      */
     public function testCreatesObjectWithMatchingClassDefinition()
@@ -35,50 +77,16 @@ class DependencyInjectorTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj);
     }
 
-    public function testGetRetrievesSameInstanceOnSubsequentCalls()
-    {
-        $config = new Config([
-            'instance' => [
-                'ZendTest\Di\TestAsset\BasicClass' => [
-                    'shared' => true,
-                    ],
-                ],
-        ]);
-        $di = new Di(null, null, $config);
-        $obj1 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $obj2 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
-        $this->assertSame($obj1, $obj2);
-    }
-
+    /**
+     * @covers ::newInstance
+     */
     public function testNewInstanceReturnsDifferentInstances()
     {
-        $di = new Di();
-        $obj1 = $di->newInstance('ZendTest\Di\TestAsset\BasicClass');
-        $obj2 = $di->newInstance('ZendTest\Di\TestAsset\BasicClass');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
-        $this->assertNotSame($obj1, $obj2);
-    }
-
-    public function testNewInstanceReturnsInstanceThatIsSharedWithGet()
-    {
-        $di = new Di();
-        $obj1 = $di->newInstance('ZendTest\Di\TestAsset\BasicClass');
-        $obj2 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
-        $this->assertSame($obj1, $obj2);
-    }
-
-    public function testNewInstanceReturnsInstanceThatIsNotSharedWithGet()
-    {
-        $di = new Di();
-        $obj1 = $di->newInstance('ZendTest\Di\TestAsset\BasicClass', [], false);
-        $obj2 = $di->get('ZendTest\Di\TestAsset\BasicClass');
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj1);
-        $this->assertInstanceOf('ZendTest\Di\TestAsset\BasicClass', $obj2);
+        $di = new DependencyInjector();
+        $obj1 = $di->newInstance(TestAsset\BasicClass::class);
+        $obj2 = $di->newInstance(TestAsset\BasicClass::class);
+        $this->assertInstanceOf(TestAsset\BasicClass::class, $obj1);
+        $this->assertInstanceOf(TestAsset\BasicClass::class, $obj2);
         $this->assertNotSame($obj1, $obj2);
     }
 

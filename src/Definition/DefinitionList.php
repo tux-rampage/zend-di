@@ -396,36 +396,6 @@ class DefinitionList extends SplDoublyLinkedList implements AggregatedDefinition
 
     /**
      * {@inheritDoc}
-     * @see \Zend\Di\Definition\DefinitionInterface::getResolverMode()
-     */
-    public function getResolverMode($class)
-    {
-        if (false === ($classDefinition = $this->getDefinitionForClass($class))) {
-            return self::RESOLVE_STRICT;
-        }
-
-        $mode = $classDefinition->getResolverMode($class);
-
-        if (!$classDefinition instanceof PartialMarker) {
-            return $mode;
-        }
-
-        /** @var $definition DefinitionInterface */
-        foreach ($this as $definition) {
-            if ($definition === $classDefinition) {
-                continue;
-            }
-
-            if ($definition->hasClass($class) && (!$definition instanceof PartialMarker)) {
-                return $definition->getResolverMode($class);
-            }
-        }
-
-        return $mode;
-    }
-
-    /**
-     * {@inheritDoc}
      * @see \Zend\Di\Definition\DefinitionInterface::getMethodRequirementType()
      */
     public function getMethodRequirementType($class, $method)

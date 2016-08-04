@@ -251,13 +251,16 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
         $useAnnotations = $strategy->getUseAnnotations(); // localize for performannce
 
         if ($useAnnotations) {
-            foreach ($rClass->getAnnotations($strategy->getAnnotationManager()) as $classAnnotation) {
-                if ($classAnnotation instanceof Annotation\Mode) {
-                    $def['resolverMode'] = $classAnnotation->mode;
-                    break;
+            $annotations = $rClass->getAnnotations($strategy->getAnnotationManager());
+
+            if ($annotations) {
+                foreach ($annotations as $classAnnotation) {
+                    if ($classAnnotation instanceof Annotation\Mode) {
+                        $def['resolverMode'] = $classAnnotation->mode;
+                        break;
+                    }
                 }
             }
-
         }
 
         foreach ($rClass->getMethods(Reflection\MethodReflection::IS_PUBLIC) as $rMethod) {

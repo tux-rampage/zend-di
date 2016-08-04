@@ -194,7 +194,7 @@ class DependencyInjector implements DependencyInjectionInterface
     public function newInstance($name, array $parameters = [])
     {
         // Minimize cycle failures
-        if ($this->currentInstances[$name] && count($this->instanciationStack)) {
+        if (isset($this->currentInstances[$name]) && count($this->instanciationStack)) {
             return $this->currentInstances[$name];
         }
 

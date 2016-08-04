@@ -61,6 +61,6 @@ class DependencyInjectedAbstractFactory implements AbstractFactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        return $this->getInjector($container)->newInstance($requestedName, $options);
+        return $this->getInjector($container)->newInstance($requestedName, $options? : []);
     }
 }

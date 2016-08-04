@@ -140,7 +140,7 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
     public function getClassSupertypes($class)
     {
         $this->processClass($class);
-        parent::getClassSupertypes($class);
+        return parent::getClassSupertypes($class);
     }
 
     /**
@@ -266,7 +266,7 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
         foreach ($rClass->getMethods(Reflection\MethodReflection::IS_PUBLIC) as $rMethod) {
             $methodName = $rMethod->getName();
 
-            if ($rMethod->getName() === '__construct' || (!$useAnnotations && $rMethod->isStatic())) {
+            if (!$useAnnotations && $rMethod->isStatic()) {
                 continue;
             }
 
@@ -289,6 +289,7 @@ class RuntimeDefinition extends ArrayDefinition implements DefinitionInterface
             if ($rMethod->getName() == '__construct') {
                 $def['methods']['__construct'] = self::METHOD_IS_CONSTRUCTOR; // required
                 $this->processParams($def, $rClass, $rMethod);
+                continue;
             }
 
             // Adding injection methods without parameters is quite useless (means nothing to inject)

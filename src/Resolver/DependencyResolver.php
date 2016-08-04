@@ -258,7 +258,7 @@ class DependencyResolver implements DependencyResolverInterface
             // The parameter is required, but we can't find anything that is suitable
             if ($isRequired) {
                 if (($methodRequirement & $mode) != 0) {
-                    throw new MissingPropertyException(sprintf('Could not resolve value for ', $class, $method, $name));
+                    throw new MissingPropertyException(sprintf('Could not resolve value for %s in %s::%s()', $name, $class, $method));
                 }
 
                 return null;

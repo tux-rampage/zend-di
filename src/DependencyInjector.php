@@ -401,7 +401,7 @@ class DependencyInjector implements DependencyInjectionInterface
         }
 
         $class = $this->getClassName($type);
-        $mode = $this->definitions->getResolverMode($class);
+        $mode = $this->config->getResolverMode($class);
         $requirement = $this->definitions->getMethodRequirementType($class, $method);
         $isRequired = (($mode & $requirement) != 0);
 

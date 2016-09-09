@@ -48,15 +48,23 @@ use Zend\Di\Resolver\DependencyResolverInterface;
  *                  // when My\Class is instanciated
  *                  Some\Interface::class => [ 'My.SpecificAlias' ]
  *              ],
+ *
+ *              // Instanciation paramters. These will only be used for
+ *              // the instanciator (i.e. the constructor)
+ *              'parameters' => [
+ *                  'foo' => My\FooImpl::class, // Use the given type to provide the injection (depends on definition)
+ *                  'bar' => '*' // Use the type preferences
+ *              ],
+ *
  *              'injections' => [
  *                  // This section may provide injections for methods which are defined by definiton
  *                  // and arbitary methods
  *
  *                  // Methods known to DI via the DI definitions, may be configured with named parameters
- *                  '__construct' => [
- *                      'foo' => My\FooImpl::class, // Use the given type to provide the injection (depends on definition)
- *                      'bar' => '*' // Use the type preferences
+ *                  'setFoo' => [
+ *                      'bar' => 'A literal String Value'
  *                  ],
+ *
  *                  // Assuming setSomething is not in the DI class defintions, the values will be
  *                  // injected to the method as POSITIONAL method arguments
  *                  'setSomething' => [

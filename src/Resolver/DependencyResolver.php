@@ -249,7 +249,7 @@ class DependencyResolver implements DependencyResolverInterface
                     continue;
                 }
 
-                if (!$this->container || $this->container->has($type)) {
+                if (($type === ContainerInterface::class) || !$this->container || $this->container->has($type)) {
                     $result[$name] = $type;
                     continue;
                 }

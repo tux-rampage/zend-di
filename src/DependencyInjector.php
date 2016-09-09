@@ -414,6 +414,11 @@ class DependencyInjector implements DependencyInjectionInterface
                 continue;
             }
 
+            if ($arg == ContainerInterface::class) {
+                $params[] = $container;
+                continue;
+            }
+
             if ($arg instanceof Resolver\TypeInjection) {
                 $arg = $arg->getType();
             }
